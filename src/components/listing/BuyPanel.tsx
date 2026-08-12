@@ -113,7 +113,10 @@ export function BuyPanel({
       {error && (
         <div className="space-y-2">
           <p className="banner-error !mb-0">{error}</p>
-          {(error.includes("SMS") || error.includes("eKYC") || error.includes("本人確認")) && (
+          {(error.includes("LINE") ||
+            error.includes("SMS") ||
+            error.includes("eKYC") ||
+            error.includes("本人確認")) && (
             <Link href="/verify" className="btn btn-ghost btn-block text-sm">
               本人確認へ進む
             </Link>

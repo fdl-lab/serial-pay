@@ -14,20 +14,26 @@ const EKYC_LABEL: Record<string, string> = {
 
 export function VerificationStatusCard() {
   const [user, setUser] = useState<VerificationStatus | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    setLoading(true);
     try {
       const res = await apiFetch("/api/auth/me");
       const json = await res.json();
       if (!res.ok) {
         setUser(null);
+        setError(null);
         return;
       }
       setUser(json.user);
       setError(null);
     } catch {
       setError("認証状態の取得に失敗しました");
+      setUser(null);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -39,12 +45,22 @@ export function VerificationStatusCard() {
     return <p className="banner-error">{error}</p>;
   }
 
-  if (!user) {
+  if (loading) {
     return (
       <section className="card-surface">
         <p className="text-sm text-ink-soft">認証状態を確認中…</p>
-        <Link href="/auth" className="btn btn-primary mt-3">
-          SMSログイン
+      </section>
+    );
+  }
+
+  if (!user) {
+    return (
+      <section className="card-surface">
+        <p className="text-sm font-semibold text-ink-soft">アカウント</p>
+        <p className="mt-1 font-bold">未ログイン</p>
+        <p className="mt-2 text-sm text-ink-soft">LINEログインから始めてね</p>
+        <Link href="/auth" className="btn btn-primary btn-block mt-4">
+          LINEでログイン
         </Link>
       </section>
     );
@@ -70,7 +86,7 @@ export function VerificationStatusCard() {
 
       <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
         <div className="rounded-xl bg-ink/5 px-3 py-2">
-          <dt className="text-ink-soft">SMS</dt>
+          <dt className="text-ink-soft">LINE</dt>
           <dd className="font-semibold">{user.phoneVerified ? "完了" : "未完了"}</dd>
         </div>
         <div className="rounded-xl bg-ink/5 px-3 py-2">

@@ -1,9 +1,12 @@
-import { PhoneAuthForm } from "@/components/auth/PhoneAuthForm";
+import { Suspense } from "react";
+import { LineAuthForm } from "@/components/auth/LineAuthForm";
 
 export default function AuthPage() {
   return (
     <main>
-      <PhoneAuthForm />
+      <Suspense fallback={<p className="text-ink-soft">読み込み中…</p>}>
+        <LineAuthForm />
+      </Suspense>
     </main>
   );
 }

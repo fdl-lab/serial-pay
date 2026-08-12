@@ -1,0 +1,54 @@
+import { NextResponse } from "next/server";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+import { syncSupabaseUser } from "@/services/auth";
+
+export async function GET(request: Request) {
+  const { searchParams, origin } = new URL(request.url);
+  const code = searchParams.get("code");
+  const next = searchParams.get("next") || "/verify";
+  const safeNext = next.startsWith("/") ? next : "/verify";
+
+  if (!code) {
+    return NextResponse.redirect(`${origin}/auth?error=missing_code`);
+  }
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) {
+    return NextResponse.redirect(`${origin}/auth?error=supabase`);
+  }
+
+  const cookieStore = await cookies();
+  const supabase = createServerClient(url, key, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll();
+      },
+      setAll(cookiesToSet) {
+        try {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options);
+          });
+        } catch {
+          // ignore
+        }
+      },
+    },
+  });
+
+  const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+  if (error || !data.user) {
+    console.error("LINE auth callback failed", error);
+    return NextResponse.redirect(`${origin}/auth?error=exchange`);
+  }
+
+  try {
+    await syncSupabaseUser(data.user);
+  } catch (e) {
+    console.error("sync after LINE login failed", e);
+    return NextResponse.redirect(`${origin}/auth?error=sync`);
+  }
+
+  return NextResponse.redirect(`${origin}${safeNext}`);
+}

@@ -25,7 +25,7 @@
 
 @layer components {
   .shell {
-    @apply mx-auto w-[min(920px,calc(100%-1.25rem))] px-0 pb-24 pt-6 sm:pb-10 sm:pt-10;
+    @apply mx-auto w-[min(920px,calc(100%-1.25rem))] px-0 pb-24 pt-6 sm:pt-10;
   }
 
   .brand-mark {

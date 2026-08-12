@@ -13,6 +13,12 @@ const EKYC_LABEL: Record<string, string> = {
   REJECTED: "却下",
 };
 
+function loginLabel(user: VerificationStatus): string {
+  if (user.authProvider === "line") return "LINEログイン";
+  if (user.phoneE164) return "SMS認証";
+  return "ログイン";
+}
+
 export function VerifyClient() {
   const searchParams = useSearchParams();
   const ekycReturn = searchParams.get("ekyc") === "return";
@@ -72,15 +78,15 @@ export function VerifyClient() {
       <header>
         <p className="brand-mark">シリアルPay</p>
         <h1 className="text-3xl font-extrabold tracking-tight">本人確認</h1>
-        <p className="mt-1 text-ink-soft">購入・出品には SMS + eKYC が必要だよ</p>
+        <p className="mt-1 text-ink-soft">購入・出品には LINEログイン + eKYC が必要だよ</p>
       </header>
 
       {error && (
         <div className="banner-error">
           <p>{error}</p>
-          {error.includes("ログイン") && (
+          {(error.includes("ログイン") || error.includes("未ログイン")) && (
             <Link href="/auth" className="mt-2 inline-block font-semibold underline">
-              SMSログインへ
+              LINEログインへ
             </Link>
           )}
         </div>
@@ -93,12 +99,12 @@ export function VerifyClient() {
           <section className="card-surface space-y-4">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-ink-soft">SMS認証</p>
+                <p className="text-sm font-semibold text-ink-soft">{loginLabel(user)}</p>
                 <p className="font-bold">
                   {user.phoneVerified ? "完了" : "未完了"}
                 </p>
-                {user.phoneE164 && (
-                  <p className="text-xs text-ink-soft font-mono">{user.phoneE164}</p>
+                {user.displayName && (
+                  <p className="text-xs text-ink-soft">{user.displayName}</p>
                 )}
               </div>
               <span
@@ -114,7 +120,7 @@ export function VerifyClient() {
 
             {!user.phoneVerified && (
               <Link href="/auth" className="btn btn-primary btn-block">
-                SMSログインする
+                LINEでログインする
               </Link>
             )}
 

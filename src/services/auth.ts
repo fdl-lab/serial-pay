@@ -2,21 +2,84 @@ import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { prisma } from "@/lib/prisma";
 import type { User } from "@prisma/client";
 import type { VerificationStatus } from "@/types/auth";
+import type { LineProfile } from "@/lib/line/oauth";
 
 export { toE164Japan } from "@/lib/phone";
 
-function syntheticEmail(supabaseId: string): string {
-  return `phone_${supabaseId.replace(/-/g, "")}@serial-pay.local`;
+function syntheticEmail(prefix: string, id: string): string {
+  return `${prefix}_${id.replace(/-/g, "")}@serial-pay.local`;
+}
+
+function isLineUser(supabaseUser: SupabaseUser): boolean {
+  const identities = supabaseUser.identities ?? [];
+  if (identities.some((i) => i.provider === "line")) return true;
+  const providers = supabaseUser.app_metadata?.providers;
+  return Array.isArray(providers) && providers.includes("line");
+}
+
+function displayNameFrom(supabaseUser: SupabaseUser, isLine: boolean): string {
+  const meta = supabaseUser.user_metadata ?? {};
+  const name =
+    (typeof meta.full_name === "string" && meta.full_name) ||
+    (typeof meta.name === "string" && meta.name) ||
+    (typeof meta.user_name === "string" && meta.user_name) ||
+    null;
+  if (name) return name;
+  if (supabaseUser.phone) return `ユーザー${supabaseUser.phone.slice(-4)}`;
+  return isLine ? "LINEユーザー" : "ユーザー";
+}
+
+/** LINE Login（アプリ直結）→ Prisma User */
+export async function syncLineUser(profile: LineProfile): Promise<User> {
+  const authProviderId = `line:${profile.userId}`;
+  const email = profile.email || syntheticEmail("line", profile.userId);
+
+  const existing = await prisma.user.findUnique({
+    where: { authProviderId },
+  });
+
+  if (existing) {
+    return prisma.user.update({
+      where: { id: existing.id },
+      data: {
+        phoneVerified: true,
+        displayName: profile.displayName || existing.displayName,
+        avatarUrl: profile.pictureUrl ?? existing.avatarUrl,
+        authProvider: "line",
+        email: profile.email || existing.email,
+      },
+    });
+  }
+
+  return prisma.user.create({
+    data: {
+      email,
+      authProvider: "line",
+      authProviderId,
+      phoneVerified: true,
+      displayName: profile.displayName || "LINEユーザー",
+      avatarUrl: profile.pictureUrl ?? null,
+      ekycStatus: "PENDING",
+    },
+  });
 }
 
 /**
  * Supabase Auth ユーザー → Prisma User 同期
- * SMS 認証完了時に phoneVerified を true にする
  */
 export async function syncSupabaseUser(supabaseUser: SupabaseUser): Promise<User> {
+  const isLine = isLineUser(supabaseUser);
   const phoneE164 = supabaseUser.phone ?? null;
-  const phoneVerified = Boolean(supabaseUser.phone_confirmed_at);
-  const email = supabaseUser.email ?? syntheticEmail(supabaseUser.id);
+  const loginVerified = Boolean(supabaseUser.phone_confirmed_at) || isLine;
+  const email = supabaseUser.email ?? syntheticEmail("user", supabaseUser.id);
+  const displayName = displayNameFrom(supabaseUser, isLine);
+  const avatarUrl =
+    typeof supabaseUser.user_metadata?.avatar_url === "string"
+      ? supabaseUser.user_metadata.avatar_url
+      : typeof supabaseUser.user_metadata?.picture === "string"
+        ? supabaseUser.user_metadata.picture
+        : null;
+  const authProvider = isLine ? "line" : phoneE164 ? "phone" : "supabase";
 
   const existing = await prisma.user.findUnique({
     where: { authProviderId: supabaseUser.id },
@@ -27,22 +90,26 @@ export async function syncSupabaseUser(supabaseUser: SupabaseUser): Promise<User
       where: { id: existing.id },
       data: {
         phoneE164: phoneE164 ?? existing.phoneE164,
-        phoneVerified: phoneVerified || existing.phoneVerified,
+        phoneVerified: loginVerified || existing.phoneVerified,
         email: supabaseUser.email ?? existing.email,
+        displayName: displayName || existing.displayName,
+        avatarUrl: avatarUrl ?? existing.avatarUrl,
+        authProvider,
       },
     });
   }
 
-  // 同じ電話番号の既存ユーザーがあれば紐付け（seed ユーザー等）
   if (phoneE164) {
     const byPhone = await prisma.user.findUnique({ where: { phoneE164 } });
     if (byPhone) {
       return prisma.user.update({
         where: { id: byPhone.id },
         data: {
-          authProvider: "supabase",
+          authProvider,
           authProviderId: supabaseUser.id,
-          phoneVerified: phoneVerified || byPhone.phoneVerified,
+          phoneVerified: loginVerified || byPhone.phoneVerified,
+          displayName: displayName || byPhone.displayName,
+          avatarUrl: avatarUrl ?? byPhone.avatarUrl,
         },
       });
     }
@@ -51,11 +118,12 @@ export async function syncSupabaseUser(supabaseUser: SupabaseUser): Promise<User
   return prisma.user.create({
     data: {
       email,
-      authProvider: "supabase",
+      authProvider,
       authProviderId: supabaseUser.id,
       phoneE164,
-      phoneVerified,
-      displayName: phoneE164 ? `ユーザー${phoneE164.slice(-4)}` : "ユーザー",
+      phoneVerified: loginVerified,
+      displayName,
+      avatarUrl,
       ekycStatus: "PENDING",
     },
   });
@@ -68,6 +136,7 @@ export function toVerificationStatus(user: User): VerificationStatus {
     displayName: user.displayName,
     phoneVerified: user.phoneVerified,
     phoneE164: user.phoneE164,
+    authProvider: user.authProvider,
     ekycStatus: user.ekycStatus,
     ekycVerifiedAt: user.ekycVerifiedAt,
     canBuy: verified,

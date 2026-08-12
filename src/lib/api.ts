@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { syncSupabaseUser } from "@/services/auth";
+import { readSessionUserId } from "@/lib/auth/app-session";
 import type { User } from "@prisma/client";
 
 export class ApiError extends Error {
@@ -34,9 +35,8 @@ export function jsonError(error: unknown) {
 }
 
 function devBypassUserId(req: Request): string | null {
-  const bypass = process.env.DEV_AUTH_BYPASS === "true";
-  const headerUserId = req.headers.get("x-user-id");
-  return headerUserId || (bypass ? process.env.DEV_USER_ID ?? null : null);
+  if (process.env.DEV_AUTH_BYPASS !== "true") return null;
+  return req.headers.get("x-user-id") || process.env.DEV_USER_ID || null;
 }
 
 function previewUser(id: string): User {
@@ -80,8 +80,26 @@ function isDbUnavailable(e: unknown): boolean {
   );
 }
 
-/** 認証済み Prisma User。Supabase セッション → DEV バイパス */
+/** 認証済み Prisma User。アプリセッション(LINE) → Supabase → DEV バイパス */
 export async function requireUser(req: Request): Promise<User> {
+  const sessionUserId = readSessionUserId(req.headers.get("cookie"));
+  if (sessionUserId) {
+    try {
+      const user = await prisma.user.findUnique({ where: { id: sessionUserId } });
+      if (user) {
+        if (user.isSuspended) {
+          throw new ApiError(403, "アカウントが停止されています", "SUSPENDED");
+        }
+        return user;
+      }
+    } catch (e) {
+      if (e instanceof ApiError) throw e;
+      if (!(process.env.DEV_AUTH_BYPASS === "true" && isDbUnavailable(e))) {
+        throw e;
+      }
+    }
+  }
+
   const supabase = await createSupabaseServerClient();
   if (supabase) {
     const {
@@ -121,7 +139,7 @@ export async function requireUser(req: Request): Promise<User> {
 
 export function assertBuyerEligible(user: User) {
   if (!user.phoneVerified) {
-    throw new ApiError(403, "SMS認証が完了していません", "PHONE_REQUIRED");
+    throw new ApiError(403, "LINEログインが完了していません", "PHONE_REQUIRED");
   }
   if (user.ekycStatus !== "APPROVED") {
     throw new ApiError(403, "eKYC（本人確認）が完了していません", "EKYC_REQUIRED");
