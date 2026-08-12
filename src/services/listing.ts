@@ -174,7 +174,9 @@ export async function listPublicItems(params?: { take?: number; q?: string }) {
       seller: {
         select: {
           id: true,
+          publicId: true,
           displayName: true,
+          avatarUrl: true,
           ratingScore: true,
           ratingCount: true,
         },
@@ -200,7 +202,9 @@ export async function listPublicItems(params?: { take?: number; q?: string }) {
     publishedAt: item.publishedAt,
     seller: {
       id: item.seller.id,
+      publicId: item.seller.publicId,
       displayName: item.seller.displayName,
+      avatarUrl: item.seller.avatarUrl,
       ratingScore: Number(item.seller.ratingScore),
       ratingCount: item.seller.ratingCount,
     },
@@ -233,9 +237,12 @@ export async function getPublicItem(id: string) {
       seller: {
         select: {
           id: true,
+          publicId: true,
           displayName: true,
+          avatarUrl: true,
           ratingScore: true,
           ratingCount: true,
+          completedSales: true,
         },
       },
     },

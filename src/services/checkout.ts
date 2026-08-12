@@ -238,10 +238,7 @@ async function fulfillTransactionById(
     throw new ApiError(409, `不正な取引状態: ${tx.status}`, "INVALID_STATE");
   }
 
-  const windowMin =
-    tx.item.confirmationWindowMinutes || confirmationWindowMinutes();
   const now = new Date();
-  const deadline = new Date(now.getTime() + windowMin * 60_000);
 
   await prisma.$transaction(async (db) => {
     await db.serialCode.updateMany({
@@ -267,13 +264,12 @@ async function fulfillTransactionById(
       },
     });
 
+    // 支払完了だが未開示。確認タイマーは初回 reveal 時に開始
     await db.transaction.update({
       where: { id: tx.id },
       data: {
-        status: "CONFIRMATION_WINDOW",
+        status: "PAID_ESCROW",
         escrowStatus: "HELD",
-        codeRevealedAt: now,
-        confirmationDeadlineAt: deadline,
         stripeChargeId: opts.stripePaymentIntentId,
       },
     });
@@ -286,18 +282,18 @@ async function fulfillTransactionById(
         entityId: tx.id,
         metadata: {
           paymentIntentId: opts.stripePaymentIntentId,
-          deadline: deadline.toISOString(),
           paymentMethod: tx.paymentMethod,
+          awaitingReveal: true,
         },
       },
     });
   });
 
-  return { transactionId: tx.id, alreadyFulfilled: false, deadline };
+  return { transactionId: tx.id, alreadyFulfilled: false };
 }
 
 /**
- * 決済成功後: コード割当・即時開示可能化・確認タイマー開始
+ * 決済成功後: コード割当・未開示のエスクロー保持（タイマーは初回 reveal 時）
  */
 export async function fulfillPaidTransaction(paymentIntentId: string) {
   const tx = await prisma.transaction.findUnique({
@@ -388,7 +384,13 @@ export async function revealCodesForBuyer(buyerId: string, transactionId: string
     where: { id: transactionId },
     include: {
       serialCodes: true,
-      item: { select: { title: true, eventName: true } },
+      item: {
+        select: {
+          title: true,
+          eventName: true,
+          confirmationWindowMinutes: true,
+        },
+      },
     },
   });
 
@@ -406,23 +408,104 @@ export async function revealCodesForBuyer(buyerId: string, transactionId: string
     throw new ApiError(403, "まだコードを開示できません", "NOT_REVEALED");
   }
 
+  let status = tx.status;
+  let codeRevealedAt = tx.codeRevealedAt;
+  let confirmationDeadlineAt = tx.confirmationDeadlineAt;
+
+  // 初回開示: タイマー開始（未開示の PAID_ESCROW のみ）
+  if (tx.status === "PAID_ESCROW") {
+    const windowMin =
+      tx.item.confirmationWindowMinutes || confirmationWindowMinutes();
+    const now = new Date();
+    const deadline = new Date(now.getTime() + windowMin * 60_000);
+
+    const updated = await prisma.transaction.update({
+      where: { id: tx.id },
+      data: {
+        status: "CONFIRMATION_WINDOW",
+        codeRevealedAt: now,
+        confirmationDeadlineAt: deadline,
+      },
+    });
+
+    status = updated.status;
+    codeRevealedAt = updated.codeRevealedAt;
+    confirmationDeadlineAt = updated.confirmationDeadlineAt;
+
+    await prisma.auditLog.create({
+      data: {
+        actorUserId: buyerId,
+        action: "CODE_REVEALED",
+        entityType: "Transaction",
+        entityId: tx.id,
+        metadata: { deadline: deadline.toISOString() },
+      },
+    });
+  }
+
   const codes = tx.serialCodes.map((c) => ({
     id: c.id,
     plaintext: decryptSerial(c.ciphertext),
     status: c.status,
   }));
 
+  const rated = await prisma.rating.findFirst({
+    where: { transactionId: tx.id, raterId: buyerId },
+    select: { id: true },
+  });
+
   return {
     transactionId: tx.id,
     itemTitle: tx.item.title,
     eventName: tx.item.eventName,
-    status: tx.status,
+    status,
     quantity: tx.quantity,
-    codeRevealedAt: tx.codeRevealedAt,
-    confirmationDeadlineAt: tx.confirmationDeadlineAt,
+    codeRevealedAt,
+    confirmationDeadlineAt,
     buyerConfirmedAt: tx.buyerConfirmedAt,
+    hasRated: Boolean(rated),
     codes,
   };
+}
+
+/** 購入者の開示待ち・確認中の取引一覧 */
+export async function listBuyerPurchases(buyerId: string) {
+  const rows = await prisma.transaction.findMany({
+    where: {
+      buyerId,
+      status: {
+        in: ["PAID_ESCROW", "CONFIRMATION_WINDOW", "DISPUTED"],
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 30,
+    include: {
+      item: {
+        select: {
+          title: true,
+          artistName: true,
+          eventName: true,
+        },
+      },
+    },
+  });
+
+  return rows.map((tx) => ({
+    id: tx.id,
+    status: tx.status,
+    awaitingReveal: tx.status === "PAID_ESCROW" || !tx.codeRevealedAt,
+    awaitingRating:
+      tx.status === "CONFIRMATION_WINDOW" && Boolean(tx.buyerConfirmedAt),
+    buyerConfirmedAt: tx.buyerConfirmedAt,
+    quantity: tx.quantity,
+    amountChargedYen: tx.amountChargedYen,
+    codeRevealedAt: tx.codeRevealedAt,
+    confirmationDeadlineAt: tx.confirmationDeadlineAt,
+    createdAt: tx.createdAt,
+    itemTitle: tx.item.title,
+    artistName: tx.item.artistName,
+    eventName: tx.item.eventName,
+  }));
 }
 
 export async function getCheckoutSessionForBuyer(

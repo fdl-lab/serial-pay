@@ -103,6 +103,7 @@ export async function creditWalletRefund(
     buyerId: string;
     amountYen: number;
     transactionId: string;
+    description?: string;
   },
 ) {
   if (params.amountYen <= 0) return null;
@@ -119,7 +120,7 @@ export async function creditWalletRefund(
       type: "REFUND_CREDIT",
       amountYen: params.amountYen,
       balanceAfter: updated.balanceYen,
-      description: "購入キャンセルによる残高返金",
+      description: params.description ?? "購入キャンセルによる残高返金",
       transactionId: params.transactionId,
     },
   });

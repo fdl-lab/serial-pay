@@ -4,7 +4,10 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { WalletBalanceCard } from "./WalletBalanceCard";
 import { PayoutRequestModal } from "./PayoutRequestModal";
-import { VerificationStatusCard } from "@/components/auth/VerificationStatusCard";
+import { PendingPurchasesCard } from "@/components/wallet/PendingPurchasesCard";
+import { MessagesCard } from "@/components/wallet/MessagesCard";
+import { ProfileCard } from "@/components/wallet/ProfileCard";
+import { PendingRatingsCard } from "@/components/wallet/PendingRatingsCard";
 import { formatYen } from "@/lib/format";
 import { apiFetch } from "@/lib/auth/fetch";
 
@@ -93,7 +96,13 @@ function MyPageInner() {
       {error && <p className="banner-error">{error}</p>}
       {connectMsg && <p className="banner-ok">{connectMsg}</p>}
 
-      <VerificationStatusCard />
+      <ProfileCard />
+
+      <MessagesCard />
+
+      <PendingRatingsCard />
+
+      <PendingPurchasesCard />
 
       {data && (
         <>

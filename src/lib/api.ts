@@ -50,6 +50,9 @@ function previewUser(id: string): User {
     phoneVerified: true,
     displayName: "プレビューユーザー",
     avatarUrl: null,
+    lineUserId: null,
+    publicId: "SP-PREVIEW1",
+    profileCompletedAt: now,
     authProvider: "preview",
     authProviderId: null,
     ekycStatus: "APPROVED",
@@ -88,7 +91,13 @@ export async function requireUser(req: Request): Promise<User> {
       const user = await prisma.user.findUnique({ where: { id: sessionUserId } });
       if (user) {
         if (user.isSuspended) {
-          throw new ApiError(403, "アカウントが停止されています", "SUSPENDED");
+          throw new ApiError(
+            403,
+            user.suspendReason === "deleted"
+              ? "退会済みのアカウントだよ"
+              : "アカウントが停止されています",
+            user.suspendReason === "deleted" ? "DELETED" : "SUSPENDED",
+          );
         }
         return user;
       }
@@ -108,7 +117,13 @@ export async function requireUser(req: Request): Promise<User> {
     if (sbUser) {
       const user = await syncSupabaseUser(sbUser);
       if (user.isSuspended) {
-        throw new ApiError(403, "アカウントが停止されています", "SUSPENDED");
+        throw new ApiError(
+          403,
+          user.suspendReason === "deleted"
+            ? "退会済みのアカウントだよ"
+            : "アカウントが停止されています",
+          user.suspendReason === "deleted" ? "DELETED" : "SUSPENDED",
+        );
       }
       return user;
     }
@@ -126,7 +141,13 @@ export async function requireUser(req: Request): Promise<User> {
       throw new ApiError(401, "ユーザーが見つかりません", "USER_NOT_FOUND");
     }
     if (user.isSuspended) {
-      throw new ApiError(403, "アカウントが停止されています", "SUSPENDED");
+      throw new ApiError(
+        403,
+        user.suspendReason === "deleted"
+          ? "退会済みのアカウントだよ"
+          : "アカウントが停止されています",
+        user.suspendReason === "deleted" ? "DELETED" : "SUSPENDED",
+      );
     }
     return user;
   } catch (e) {

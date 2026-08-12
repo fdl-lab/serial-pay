@@ -32,6 +32,8 @@ async function main() {
     create: {
       email: "buyer@example.com",
       displayName: "デモ購入者",
+      publicId: "SP-BUYER001",
+      profileCompletedAt: new Date(),
       phoneE164: "+819012345678",
       phoneVerified: true,
       ekycStatus: "APPROVED",
@@ -46,6 +48,8 @@ async function main() {
     create: {
       email: "seller@example.com",
       displayName: "デモ出品者",
+      publicId: "SP-SELLER01",
+      profileCompletedAt: new Date(),
       phoneE164: "+819087654321",
       phoneVerified: true,
       ekycStatus: "APPROVED",

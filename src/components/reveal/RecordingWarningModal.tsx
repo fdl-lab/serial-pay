@@ -4,9 +4,15 @@ type Props = {
   open: boolean;
   windowMinutes: number;
   onAccept: () => void;
+  onDefer: () => void;
 };
 
-export function RecordingWarningModal({ open, windowMinutes, onAccept }: Props) {
+export function RecordingWarningModal({
+  open,
+  windowMinutes,
+  onAccept,
+  onDefer,
+}: Props) {
   if (!open) return null;
 
   return (
@@ -29,12 +35,19 @@ export function RecordingWarningModal({ open, windowMinutes, onAccept }: Props) 
         </p>
         <ul className="mt-3 list-disc space-y-1 pl-5 text-sm leading-relaxed">
           <li>端末の画面録画を ON にしてから「コードを表示」を押す</li>
-          <li>開示後 {windowMinutes} 分以内に応募・受取確認 or 異議申し立て</li>
-          <li>期限内に何もしないと自動で取引完了・ウォレットへ売上確定</li>
+          <li>開示後 {windowMinutes} 分以内に受取確認＋評価（評価で取引完了）or 異議申し立て</li>
+          <li>期限内に評価しないと自動で取引完了・ウォレットへ売上確定</li>
+          <li>異議時は必要箇所を3分以内に切り取り添付（編集・AI加工不可）</li>
+          <li>まだ準備できてなければ「保留」して、マイページからいつでも開示できる</li>
         </ul>
-        <button type="button" className="btn btn-primary btn-block mt-5" onClick={onAccept}>
-          録画を開始したのでコードを表示する
-        </button>
+        <div className="mt-5 flex flex-col gap-2">
+          <button type="button" className="btn btn-primary btn-block" onClick={onAccept}>
+            録画を開始したのでコードを表示する
+          </button>
+          <button type="button" className="btn btn-ghost btn-block" onClick={onDefer}>
+            まだシリアルは見ないで保留する
+          </button>
+        </div>
       </div>
     </div>
   );

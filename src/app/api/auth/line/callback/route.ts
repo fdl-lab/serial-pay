@@ -6,6 +6,7 @@ import {
   createSessionCookieValue,
   sessionCookieOptions,
 } from "@/lib/auth/app-session";
+import { ApiError } from "@/lib/api";
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -30,9 +31,14 @@ export async function GET(req: Request) {
   try {
     const { accessToken } = await exchangeLineCode(code);
     const profile = await fetchLineProfile(accessToken);
-    const user = await syncLineUser(profile);
+    const { user, created } = await syncLineUser(profile);
 
-    const res = NextResponse.redirect(`${origin}${safeNext}`);
+    const needsProfile = created || !user.profileCompletedAt;
+    const dest = needsProfile
+      ? `/auth/profile?next=${encodeURIComponent(safeNext)}`
+      : safeNext;
+
+    const res = NextResponse.redirect(`${origin}${dest}`);
     const session = sessionCookieOptions(createSessionCookieValue(user.id));
     res.cookies.set(session);
     res.cookies.set("line_oauth_state", "", { path: "/", maxAge: 0 });
@@ -40,6 +46,16 @@ export async function GET(req: Request) {
     return res;
   } catch (e) {
     console.error("LINE callback failed", e);
-    return NextResponse.redirect(`${origin}/auth?error=line_callback`);
+    const codeName =
+      e instanceof ApiError
+        ? e.code === "LINE_BANNED"
+          ? "line_banned"
+          : e.code === "LINE_COOLDOWN"
+            ? "line_cooldown"
+            : e.code === "DELETED" || e.code === "SUSPENDED"
+              ? "line_blocked"
+              : "line_callback"
+        : "line_callback";
+    return NextResponse.redirect(`${origin}/auth?error=${codeName}`);
   }
 }

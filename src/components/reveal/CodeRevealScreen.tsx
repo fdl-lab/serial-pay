@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { CountdownTimer } from "./CountdownTimer";
 import { RecordingWarningModal } from "./RecordingWarningModal";
+import { RatingForm } from "@/components/rating/RatingForm";
 import { apiFetch } from "@/lib/auth/fetch";
 
 type RevealPayload = {
@@ -14,6 +17,7 @@ type RevealPayload = {
   codeRevealedAt: string | null;
   confirmationDeadlineAt: string | null;
   buyerConfirmedAt: string | null;
+  hasRated: boolean;
   codes: { id: string; plaintext: string; status: string }[];
 };
 
@@ -26,12 +30,15 @@ export function CodeRevealScreen({
   transactionId,
   windowMinutes = 30,
 }: Props) {
+  const router = useRouter();
   const [accepted, setAccepted] = useState(false);
+  const [deferred, setDeferred] = useState(false);
   const [data, setData] = useState<RevealPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+  const [completed, setCompleted] = useState(false);
 
   useEffect(() => {
     if (!accepted) return;
@@ -43,9 +50,8 @@ export function CodeRevealScreen({
         if (!res.ok) throw new Error(json.error ?? "取得に失敗しました");
         if (!cancelled) {
           setData(json);
-          if (json.buyerConfirmedAt || json.status === "COMPLETED") {
-            setDone(true);
-          }
+          if (json.buyerConfirmedAt) setConfirmed(true);
+          if (json.status === "COMPLETED" || json.hasRated) setCompleted(true);
         }
       } catch (e) {
         if (!cancelled) {
@@ -74,7 +80,12 @@ export function CodeRevealScreen({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "受取確認に失敗しました");
-      setDone(true);
+      setConfirmed(true);
+      setData((prev) =>
+        prev
+          ? { ...prev, buyerConfirmedAt: prev.buyerConfirmedAt ?? new Date().toISOString() }
+          : prev,
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : "エラーが発生しました");
     } finally {
@@ -82,12 +93,24 @@ export function CodeRevealScreen({
     }
   }
 
+  function deferReveal() {
+    setDeferred(true);
+    router.push("/me");
+  }
+
+  const canDispute =
+    !confirmed &&
+    data &&
+    data.status !== "COMPLETED" &&
+    data.status !== "DISPUTED";
+
   return (
     <section className="card-surface">
       <RecordingWarningModal
-        open={!accepted}
+        open={!accepted && !deferred}
         windowMinutes={windowMinutes}
         onAccept={() => setAccepted(true)}
+        onDefer={deferReveal}
       />
 
       <header className="mb-5">
@@ -99,19 +122,26 @@ export function CodeRevealScreen({
             {data.eventName ? ` · ${data.eventName}` : ""}
           </p>
         )}
+        {!accepted && !data && (
+          <p className="mt-1 text-ink-soft">
+            準備ができたら画録を開始してコードを表示してね。保留もできるよ。
+          </p>
+        )}
       </header>
 
-      <div className="mb-5 grid gap-3 rounded-2xl border border-ink/10 bg-gradient-to-r from-coral/10 to-mint/10 p-4 sm:grid-cols-[auto_1fr] sm:items-center">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-wider text-ink-soft">
-            受取確認まで
+      {accepted && data?.status !== "COMPLETED" && (
+        <div className="mb-5 grid gap-3 rounded-2xl border border-ink/10 bg-gradient-to-r from-coral/10 to-mint/10 p-4 sm:grid-cols-[auto_1fr] sm:items-center">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-ink-soft">
+              評価完了まで
+            </p>
+            <CountdownTimer deadlineIso={data?.confirmationDeadlineAt ?? null} />
+          </div>
+          <p className="text-sm text-ink-soft">
+            受取確認のあと、出品者を評価すると取引完了・売上反映になるよ。期限を過ぎると評価なしでも自動完了するよ。
           </p>
-          <CountdownTimer deadlineIso={data?.confirmationDeadlineAt ?? null} />
         </div>
-        <p className="text-sm text-ink-soft">
-          期限内に異議がなければ自動で取引完了・ウォレットへ売上反映。使えなかった場合は録画付きで申し立ててね。
-        </p>
-      </div>
+      )}
 
       {error && <p className="banner-error">{error}</p>}
       {accepted && !data && !error && (
@@ -143,19 +173,54 @@ export function CodeRevealScreen({
         </ul>
       )}
 
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <button
-          type="button"
-          className="btn btn-primary"
-          disabled={!data || busy || done || data?.status === "DISPUTED"}
-          onClick={confirm}
-        >
-          {done ? "受取確認済み" : "使えたので受取確認する"}
-        </button>
-        <a className="btn btn-ghost" href={`/transactions/${transactionId}/dispute`}>
-          使えなかった（異議申し立て）
-        </a>
-      </div>
+      {accepted && data && data.status !== "COMPLETED" && data.status !== "DISPUTED" && (
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={!data || busy || confirmed}
+            onClick={confirm}
+          >
+            {confirmed ? "受取確認済み → 評価へ" : "使えたので受取確認する"}
+          </button>
+          {canDispute && (
+            <a
+              className="btn btn-ghost"
+              href={`/transactions/${transactionId}/dispute`}
+            >
+              使えなかった（異議申し立て）
+            </a>
+          )}
+        </div>
+      )}
+
+      {accepted && data && confirmed && !completed && data.status !== "DISPUTED" && (
+        <div className="mt-5">
+          <RatingForm
+            transactionId={transactionId}
+            onDone={() => {
+              setCompleted(true);
+              setData((prev) =>
+                prev ? { ...prev, status: "COMPLETED", hasRated: true } : prev,
+              );
+            }}
+          />
+        </div>
+      )}
+
+      {completed && (
+        <p className="banner-ok mt-5">取引完了！評価ありがとう。出品者へ売上が反映されたよ。</p>
+      )}
+
+      {!accepted && (
+        <p className="text-center text-sm text-ink-soft">
+          あとで見る場合は{" "}
+          <Link href="/me" className="font-semibold text-mint-deep underline">
+            マイページ
+          </Link>{" "}
+          の「開示前のシリアル」から開けるよ
+        </p>
+      )}
     </section>
   );
 }

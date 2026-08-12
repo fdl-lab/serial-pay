@@ -16,6 +16,7 @@
     "jobs:auto-complete": "tsx scripts/auto-complete.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1109.0",
     "@prisma/client": "^6.5.0",
     "@stripe/react-stripe-js": "^3.5.0",
     "@stripe/stripe-js": "^5.7.0",

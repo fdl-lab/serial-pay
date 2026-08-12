@@ -16,7 +16,9 @@ export type ListingListItem = {
   bulkDiscountPercent: number | null;
   suggestedAvgPriceYen: number | null;
   seller: {
+    publicId?: string | null;
     displayName: string | null;
+    avatarUrl?: string | null;
     ratingScore: { toString(): string } | number | string;
     ratingCount: number;
   };
@@ -74,10 +76,19 @@ export function ItemList({
             >
               {/* 出品者アバター */}
               <div
-                className="flex h-11 w-11 shrink-0 items-center justify-center self-center rounded-full bg-ink text-sm font-extrabold text-white sm:h-12 sm:w-12"
+                className="relative flex h-11 w-11 shrink-0 items-center justify-center self-center overflow-hidden rounded-full bg-ink text-sm font-extrabold text-white sm:h-12 sm:w-12"
                 aria-hidden
               >
-                {sellerInitial(sellerName)}
+                {item.seller.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={item.seller.avatarUrl}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  sellerInitial(sellerName)
+                )}
               </div>
 
               <div className="min-w-0 flex-1">
@@ -101,6 +112,11 @@ export function ItemList({
                   <span className="font-bold text-ink">{sellerName}</span>
                   {rating && (
                     <span className="font-semibold text-ink-soft">★{rating}</span>
+                  )}
+                  {item.seller.publicId && (
+                    <span className="font-mono text-[11px] text-ink-soft">
+                      {item.seller.publicId}
+                    </span>
                   )}
                 </p>
 

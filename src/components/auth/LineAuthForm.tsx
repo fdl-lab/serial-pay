@@ -8,6 +8,10 @@ const ERROR_MSG: Record<string, string> = {
   line_denied: "LINEログインがキャンセルされたみたい",
   line_state: "セキュリティ検証に失敗したよ。もう一度試してね",
   line_callback: "LINEログイン処理に失敗したよ。コールバックURLを確認してね",
+  line_banned: "このLINEアカウントは利用停止中だよ",
+  line_cooldown:
+    "退会後30日間は同じLINEで再登録できないよ。期限後は新しいアカウントになるよ（昔のアカウントは復活しないよ）",
+  line_blocked: "このアカウントではログインできないよ",
   line: "LINEログインに失敗したよ。もう一度試してみてね",
 };
 

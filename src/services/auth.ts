@@ -1,8 +1,15 @@
+import { z } from "zod";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { prisma } from "@/lib/prisma";
 import type { User } from "@prisma/client";
 import type { VerificationStatus } from "@/types/auth";
 import type { LineProfile } from "@/lib/line/oauth";
+import { allocatePublicId, ensurePublicId } from "@/lib/public-id";
+import { ApiError } from "@/lib/api";
+import {
+  assertLineCanSignIn,
+  linkLineIdentityToUser,
+} from "@/services/line-identity";
 
 export { toE164Japan } from "@/lib/phone";
 
@@ -29,39 +36,75 @@ function displayNameFrom(supabaseUser: SupabaseUser, isLine: boolean): string {
   return isLine ? "LINEユーザー" : "ユーザー";
 }
 
-/** LINE Login（アプリ直結）→ Prisma User */
-export async function syncLineUser(profile: LineProfile): Promise<User> {
-  const authProviderId = `line:${profile.userId}`;
-  const email = profile.email || syntheticEmail("line", profile.userId);
+async function withPublicId(user: User): Promise<User> {
+  if (user.publicId) return user;
+  const publicId = await allocatePublicId();
+  return prisma.user.update({
+    where: { id: user.id },
+    data: { publicId },
+  });
+}
+
+/** LINE Login（アプリ直結）→ Prisma User
+ * 退会後は同じアカウントは復活しない。クールダウン後は新規 User。
+ */
+export async function syncLineUser(
+  profile: LineProfile,
+): Promise<{ user: User; created: boolean }> {
+  const lineUserId = profile.userId;
+  const authProviderId = `line:${lineUserId}`;
+  const email = profile.email || syntheticEmail("line", lineUserId);
 
   const existing = await prisma.user.findUnique({
     where: { authProviderId },
   });
 
   if (existing) {
-    return prisma.user.update({
+    if (existing.isSuspended) {
+      throw new ApiError(
+        403,
+        existing.suspendReason === "deleted"
+          ? "退会済みのアカウントだよ"
+          : "アカウントが停止されています",
+        existing.suspendReason === "deleted" ? "DELETED" : "SUSPENDED",
+      );
+    }
+    // 有効な既存アカウント → クールダウン対象外でログイン
+    await assertLineCanSignIn(lineUserId, { allowActiveLogin: true });
+    const user = await prisma.user.update({
       where: { id: existing.id },
       data: {
         phoneVerified: true,
-        displayName: profile.displayName || existing.displayName,
-        avatarUrl: profile.pictureUrl ?? existing.avatarUrl,
+        displayName: existing.displayName || profile.displayName || "LINEユーザー",
+        avatarUrl: existing.avatarUrl || profile.pictureUrl || null,
         authProvider: "line",
+        lineUserId,
         email: profile.email || existing.email,
+        publicId: existing.publicId || (await allocatePublicId()),
       },
     });
+    await linkLineIdentityToUser(lineUserId, user.id);
+    return { user, created: false };
   }
 
-  return prisma.user.create({
+  // 新規（または退会後の再登録）→ BAN / クールダウン検査
+  await assertLineCanSignIn(lineUserId, { allowActiveLogin: false });
+
+  const user = await prisma.user.create({
     data: {
       email,
       authProvider: "line",
       authProviderId,
+      lineUserId,
       phoneVerified: true,
       displayName: profile.displayName || "LINEユーザー",
       avatarUrl: profile.pictureUrl ?? null,
+      publicId: await allocatePublicId(),
       ekycStatus: "PENDING",
     },
   });
+  await linkLineIdentityToUser(lineUserId, user.id);
+  return { user, created: true };
 }
 
 /**
@@ -86,17 +129,19 @@ export async function syncSupabaseUser(supabaseUser: SupabaseUser): Promise<User
   });
 
   if (existing) {
-    return prisma.user.update({
+    const user = await prisma.user.update({
       where: { id: existing.id },
       data: {
         phoneE164: phoneE164 ?? existing.phoneE164,
         phoneVerified: loginVerified || existing.phoneVerified,
         email: supabaseUser.email ?? existing.email,
-        displayName: displayName || existing.displayName,
-        avatarUrl: avatarUrl ?? existing.avatarUrl,
+        displayName: existing.displayName || displayName,
+        avatarUrl: existing.avatarUrl || avatarUrl,
         authProvider,
+        publicId: existing.publicId || (await allocatePublicId()),
       },
     });
+    return user;
   }
 
   if (phoneE164) {
@@ -108,8 +153,9 @@ export async function syncSupabaseUser(supabaseUser: SupabaseUser): Promise<User
           authProvider,
           authProviderId: supabaseUser.id,
           phoneVerified: loginVerified || byPhone.phoneVerified,
-          displayName: displayName || byPhone.displayName,
-          avatarUrl: avatarUrl ?? byPhone.avatarUrl,
+          displayName: byPhone.displayName || displayName,
+          avatarUrl: byPhone.avatarUrl || avatarUrl,
+          publicId: byPhone.publicId || (await allocatePublicId()),
         },
       });
     }
@@ -124,16 +170,44 @@ export async function syncSupabaseUser(supabaseUser: SupabaseUser): Promise<User
       phoneVerified: loginVerified,
       displayName,
       avatarUrl,
+      publicId: await allocatePublicId(),
       ekycStatus: "PENDING",
     },
   });
+}
+
+const profileSchema = z.object({
+  displayName: z
+    .string()
+    .trim()
+    .min(1, "名前を入力してね")
+    .max(40, "名前は40文字以内にしてね"),
+  avatarUrl: z.union([z.string().url(), z.null()]).optional(),
+});
+
+export async function updateProfile(userId: string, raw: unknown) {
+  const input = profileSchema.parse(raw);
+  const user = await prisma.user.update({
+    where: { id: userId },
+    data: {
+      displayName: input.displayName,
+      ...(input.avatarUrl !== undefined ? { avatarUrl: input.avatarUrl } : {}),
+      profileCompletedAt: new Date(),
+    },
+  });
+  return withPublicId(user);
 }
 
 export function toVerificationStatus(user: User): VerificationStatus {
   const verified = user.phoneVerified && user.ekycStatus === "APPROVED";
   return {
     id: user.id,
+    publicId: user.publicId,
     displayName: user.displayName,
+    avatarUrl: user.avatarUrl,
+    ratingScore: Number(user.ratingScore),
+    ratingCount: user.ratingCount,
+    profileCompletedAt: user.profileCompletedAt,
     phoneVerified: user.phoneVerified,
     phoneE164: user.phoneE164,
     authProvider: user.authProvider,
@@ -142,4 +216,15 @@ export function toVerificationStatus(user: User): VerificationStatus {
     canBuy: verified,
     canSell: verified,
   };
+}
+
+export async function getMeStatus(user: User): Promise<VerificationStatus> {
+  const publicId = await ensurePublicId(user.id, user.publicId);
+  return toVerificationStatus({ ...user, publicId });
+}
+
+export async function requireOwnedPublicId(userId: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new ApiError(404, "ユーザーが見つかりません", "NOT_FOUND");
+  return ensurePublicId(user.id, user.publicId);
 }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPublicItem } from "@/services/listing";
+import { listSellerRatings } from "@/services/rating";
 import { formatYen } from "@/lib/format";
 import { BuyPanel } from "@/components/listing/BuyPanel";
 
@@ -19,6 +20,7 @@ export default async function ItemDetailPage({ params }: Props) {
       ? Number(item.seller.ratingScore.toString()).toFixed(1)
       : null;
   const initial = sellerName.slice(0, 1);
+  const recentRatings = await listSellerRatings(item.seller.id, 5);
 
   return (
     <main className="space-y-4 pb-28 sm:pb-4">
@@ -34,7 +36,6 @@ export default async function ItemDetailPage({ params }: Props) {
               {item.artistName}
             </p>
           )}
-          {/* 出品タイトル */}
           <h1 className="text-[1.35rem] font-extrabold leading-snug tracking-tight sm:text-3xl">
             {item.title}
           </h1>
@@ -44,18 +45,26 @@ export default async function ItemDetailPage({ params }: Props) {
           </p>
         </div>
 
-        {/* 出品者ブロック（モバイルでもはっきり見える） */}
         <section
           className="flex items-center gap-3 rounded-2xl border border-ink/10 bg-ink/[0.03] px-3 py-3"
           aria-label="出品者情報"
         >
           <div
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-ink text-base font-extrabold text-white"
+            className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-ink text-base font-extrabold text-white"
             aria-hidden
           >
-            {initial}
+            {item.seller.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={item.seller.avatarUrl}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              initial
+            )}
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="text-[11px] font-bold uppercase tracking-wider text-ink-soft">
               出品者
             </p>
@@ -65,11 +74,18 @@ export default async function ItemDetailPage({ params }: Props) {
                 ? `評価 ★${rating}（${item.seller.ratingCount}件）`
                 : "評価まだなし"}
               {" · "}
-              {item.listingType === "SET"
-                ? `セット ${item.setQuantity ?? item.stockAvailable}枚`
-                : `残り ${item.stockAvailable}枚`}
+              売上 {item.seller.completedSales}件
+              {item.seller.publicId ? ` · ${item.seller.publicId}` : ""}
             </p>
           </div>
+          {item.seller.publicId && (
+            <Link
+              href={`/sellers/${item.seller.publicId}`}
+              className="btn btn-ghost shrink-0 !px-3 !py-2 text-xs"
+            >
+              評価を見る
+            </Link>
+          )}
         </section>
 
         <div className="flex items-end justify-between gap-3 border-y border-ink/10 py-4">
@@ -101,6 +117,30 @@ export default async function ItemDetailPage({ params }: Props) {
               {item.bulkDiscountMinQty}枚以上で {item.bulkDiscountPercent}% OFF
             </p>
           )}
+
+        {recentRatings.length > 0 && (
+          <section className="space-y-2">
+            <h2 className="text-sm font-bold">最近の評価</h2>
+            <ul className="space-y-2">
+              {recentRatings.map((r) => (
+                <li
+                  key={r.id}
+                  className="rounded-xl border border-ink/10 bg-white px-3 py-2 text-sm"
+                >
+                  <p className="font-semibold">
+                    ★{r.score}{" "}
+                    <span className="font-normal text-ink-soft">
+                      · {r.raterName}
+                    </span>
+                  </p>
+                  {r.comment && (
+                    <p className="mt-1 text-ink-soft">{r.comment}</p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         <BuyPanel
           itemId={item.id}

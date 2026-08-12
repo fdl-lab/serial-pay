@@ -6,3 +6,5 @@ dist
 .next
 *.log
 .vercel
+uploads
+*.tsbuildinfo

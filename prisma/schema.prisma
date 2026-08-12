@@ -130,9 +130,18 @@ model User {
   displayName   String?
   avatarUrl     String?
 
+  /// 公開用の変更不可ID（詐欺対策の本人目印）。例: SP-A2B9K7MQ
+  publicId String? @unique
+
+  /// 初回プロフィール設定完了時刻（未設定なら登録後に設定画面へ）
+  profileCompletedAt DateTime?
+
   // Auth プロバイダ連携
-  authProvider   String? // "credentials" | "supabase" | "google" 等
+  authProvider   String? // "credentials" | "supabase" | "google" | "line" 等
   authProviderId String? @unique
+
+  /// LINE userId（退会後も監査用に User 側へ残す場合あり。正は LineIdentity）
+  lineUserId String?
 
   // eKYC / SMS
   ekycStatus         EkycStatus @default(PENDING)
@@ -163,10 +172,38 @@ model User {
   ratingsGiven     Rating[]        @relation("Rater")
   ratingsReceived  Rating[]        @relation("Ratee")
   payoutRequests   PayoutRequest[]
+  messages         UserMessage[]
 
   @@index([ekycStatus])
   @@index([stripeConnectStatus])
+  @@index([lineUserId])
   @@map("users")
+}
+
+// -----------------------------------------------------------------------------
+// LineIdentity（退会後も残る LINE 紐づけ・BAN / 再登録クールダウン）
+// -----------------------------------------------------------------------------
+
+model LineIdentity {
+  lineUserId String @id
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// 現在有効な User（退会後は null）
+  currentUserId String?
+
+  bannedAt  DateTime?
+  banReason String?
+
+  lastDeletedAt DateTime?
+  deleteCount   Int       @default(0)
+
+  /// 累積リスク（退会しても残す）
+  lifetimeDisputeAsBuyer  Int @default(0)
+  lifetimeDisputeAsSeller Int @default(0)
+
+  @@map("line_identities")
 }
 
 // -----------------------------------------------------------------------------
@@ -470,4 +507,31 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// -----------------------------------------------------------------------------
+// UserMessage（マイページ通知）
+// -----------------------------------------------------------------------------
+
+model UserMessage {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  kind  String // DISPUTE_SUBMITTED | DISPUTE_APPROVED | DISPUTE_REJECTED …
+  title String
+  body  String @db.Text
+
+  linkHref          String?
+  linkLabel         String?
+  relatedEntityType String?
+  relatedEntityId   String?
+
+  readAt DateTime?
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
+  @@map("user_messages")
 }

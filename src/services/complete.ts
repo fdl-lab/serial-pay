@@ -3,7 +3,8 @@ import { ApiError } from "@/lib/api";
 import { creditSaleToWallet } from "@/services/wallet";
 
 /**
- * 受取確認 → 出品者ウォレットへ売上反映（手数料10%差引後）
+ * 受取確認のみ（まだ取引完了・売上反映はしない）
+ * 完了は評価提出時。
  */
 export async function confirmReceipt(buyerId: string, transactionId: string) {
   const tx = await prisma.transaction.findUnique({
@@ -19,12 +20,30 @@ export async function confirmReceipt(buyerId: string, transactionId: string) {
   if (tx.confirmationDeadlineAt && tx.confirmationDeadlineAt < new Date()) {
     throw new ApiError(409, "確認期限が過ぎています", "DEADLINE_PASSED");
   }
+  if (tx.buyerConfirmedAt) {
+    return { transactionId: tx.id, alreadyConfirmed: true };
+  }
 
-  return settleToWallet(tx.id, "buyer_confirm");
+  await prisma.transaction.update({
+    where: { id: tx.id },
+    data: { buyerConfirmedAt: new Date() },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      actorUserId: buyerId,
+      action: "BUYER_CONFIRMED_RECEIPT",
+      entityType: "Transaction",
+      entityId: tx.id,
+    },
+  });
+
+  return { transactionId: tx.id, alreadyConfirmed: false };
 }
 
 /**
  * 確認ウィンドウ経過後の自動完了
+ * （期限内に評価されなかった場合の出品者保護）
  */
 export async function autoCompleteExpired() {
   const now = new Date();
@@ -55,7 +74,7 @@ export async function autoCompleteExpired() {
 
 async function settleToWallet(
   transactionId: string,
-  reason: "buyer_confirm" | "auto_complete" | "dispute_rejected",
+  reason: "buyer_rating" | "auto_complete" | "dispute_rejected",
 ) {
   const tx = await prisma.transaction.findUnique({
     where: { id: transactionId },
@@ -67,7 +86,7 @@ async function settleToWallet(
   }
 
   const allowed =
-    (reason === "buyer_confirm" && tx.status === "CONFIRMATION_WINDOW") ||
+    (reason === "buyer_rating" && tx.status === "CONFIRMATION_WINDOW") ||
     (reason === "auto_complete" && tx.status === "CONFIRMATION_WINDOW") ||
     (reason === "dispute_rejected" &&
       (tx.status === "DISPUTED" || tx.status === "CONFIRMATION_WINDOW"));
@@ -89,7 +108,8 @@ async function settleToWallet(
       data: {
         status: "COMPLETED",
         escrowStatus: "RELEASED",
-        buyerConfirmedAt: reason === "buyer_confirm" ? now : tx.buyerConfirmedAt,
+        buyerConfirmedAt:
+          reason === "buyer_rating" ? tx.buyerConfirmedAt ?? now : tx.buyerConfirmedAt,
         autoCompletedAt: reason === "auto_complete" ? now : tx.autoCompletedAt,
         payoutReleasedAt: now,
       },
@@ -106,7 +126,7 @@ async function settleToWallet(
 
     await db.auditLog.create({
       data: {
-        actorUserId: reason === "buyer_confirm" ? tx.buyerId : null,
+        actorUserId: reason === "buyer_rating" ? tx.buyerId : null,
         action: "WALLET_SALE_CREDITED",
         entityType: "Transaction",
         entityId: tx.id,
@@ -125,7 +145,7 @@ async function settleToWallet(
 /** @deprecated 名称互換。実態はウォレット反映 */
 export async function releasePayout(
   transactionId: string,
-  reason: "buyer_confirm" | "auto_complete" | "dispute_rejected",
+  reason: "buyer_rating" | "auto_complete" | "dispute_rejected",
 ) {
   return settleToWallet(transactionId, reason);
 }
