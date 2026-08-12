@@ -95,6 +95,39 @@ export async function debitWalletForPurchase(
 }
 
 /**
+ * 決済キャンセル時などにウォレット先引き分を返金
+ */
+export async function creditWalletRefund(
+  db: Prisma.TransactionClient,
+  params: {
+    buyerId: string;
+    amountYen: number;
+    transactionId: string;
+  },
+) {
+  if (params.amountYen <= 0) return null;
+
+  const wallet = await ensureWallet(params.buyerId, db);
+  const updated = await db.wallet.update({
+    where: { id: wallet.id },
+    data: { balanceYen: { increment: params.amountYen } },
+  });
+
+  await db.walletLedger.create({
+    data: {
+      walletId: wallet.id,
+      type: "REFUND_CREDIT",
+      amountYen: params.amountYen,
+      balanceAfter: updated.balanceYen,
+      description: "購入キャンセルによる残高返金",
+      transactionId: params.transactionId,
+    },
+  });
+
+  return updated;
+}
+
+/**
  * 振込申請（出金）。手数料一律200円。
  * Stripe Connect へ Transfer し、Connect 側の銀行へ Payout。
  */

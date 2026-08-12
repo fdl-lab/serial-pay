@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { WalletBalanceCard } from "./WalletBalanceCard";
 import { PayoutRequestModal } from "./PayoutRequestModal";
 import { VerificationStatusCard } from "@/components/auth/VerificationStatusCard";
@@ -28,10 +29,16 @@ type WalletResponse = {
   }[];
 };
 
-export function MyPageClient() {
+function MyPageInner() {
+  const searchParams = useSearchParams();
+  const connectReturn =
+    searchParams.get("connect") === "return" ||
+    searchParams.get("connect") === "refresh";
+
   const [data, setData] = useState<WalletResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [payoutOpen, setPayoutOpen] = useState(false);
+  const [connectMsg, setConnectMsg] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -49,6 +56,32 @@ export function MyPageClient() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!connectReturn) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiFetch("/api/connect/onboard");
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? "Connect同期に失敗");
+        if (cancelled) return;
+        setConnectMsg(
+          json.status === "ACTIVE"
+            ? "銀行口座の登録が完了したよ"
+            : "口座登録はまだ完了していないみたい。もう一度「銀行口座を登録」から進めてね",
+        );
+        await load();
+      } catch (e) {
+        if (!cancelled) {
+          setConnectMsg(e instanceof Error ? e.message : "Connect同期エラー");
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [connectReturn, load]);
+
   return (
     <div className="space-y-4">
       <header>
@@ -58,6 +91,7 @@ export function MyPageClient() {
       </header>
 
       {error && <p className="banner-error">{error}</p>}
+      {connectMsg && <p className="banner-ok">{connectMsg}</p>}
 
       <VerificationStatusCard />
 
@@ -132,5 +166,13 @@ export function MyPageClient() {
 
       {!data && !error && <p className="text-ink-soft">読み込み中…</p>}
     </div>
+  );
+}
+
+export function MyPageClient() {
+  return (
+    <Suspense fallback={<p className="text-ink-soft">読み込み中…</p>}>
+      <MyPageInner />
+    </Suspense>
   );
 }

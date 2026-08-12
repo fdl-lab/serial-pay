@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
-import { fulfillPaidTransaction } from "@/services/checkout";
+import { fulfillPaidTransaction, cancelPendingPayment } from "@/services/checkout";
 import { applyEkycWebhook } from "@/services/ekyc";
 import Stripe from "stripe";
 
@@ -32,9 +32,10 @@ export async function POST(req: Request) {
         await fulfillPaidTransaction(pi.id);
         break;
       }
-      case "payment_intent.payment_failed": {
+      case "payment_intent.payment_failed":
+      case "payment_intent.canceled": {
         const pi = event.data.object as Stripe.PaymentIntent;
-        console.warn("payment_failed", pi.id, pi.metadata?.transactionId);
+        await cancelPendingPayment(pi.id);
         break;
       }
       case "identity.verification_session.verified": {

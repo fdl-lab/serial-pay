@@ -61,10 +61,8 @@ export function BuyPanel({
         return;
       }
 
-      if (json.clientSecret) {
-        setError(
-          "カード決済用の clientSecret は取得できたよ。Stripe Elements 連携はこれから。いまは残高フル払いを試してね。",
-        );
+      if (json.clientSecret && json.transactionId) {
+        router.push(`/checkout/${json.transactionId}`);
         return;
       }
 
@@ -107,7 +105,7 @@ export function BuyPanel({
           checked={useWallet}
           onChange={(e) => setUseWallet(e.target.checked)}
         />
-        売上金残高で支払う（足りれば即開示）
+        売上金残高で支払う（足りれば即開示 / 足りなければカード併用）
       </label>
 
       {error && (
@@ -124,7 +122,6 @@ export function BuyPanel({
         </div>
       )}
 
-      {/* スマホは下部ナビの上に固定しやすい余白付きフル幅ボタン */}
       <button
         type="button"
         className="btn btn-primary btn-block min-h-12 text-base"

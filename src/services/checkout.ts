@@ -3,19 +3,26 @@ import { getStripe, confirmationWindowMinutes } from "@/lib/stripe";
 import { calcPriceBreakdown } from "@/lib/money";
 import { ApiError, assertBuyerEligible } from "@/lib/api";
 import { decryptSerial } from "@/lib/crypto/serial";
-import type { User } from "@prisma/client";
+import {
+  debitWalletForPurchase,
+  creditWalletRefund,
+  ensureWallet,
+} from "@/services/wallet";
+import type { PaymentMethod, User } from "@prisma/client";
 import { z } from "zod";
 
 const checkoutSchema = z.object({
   itemId: z.string().min(1),
   quantity: z.number().int().min(1).max(100).optional(),
+  useWalletYen: z.number().int().min(0).optional().default(0),
 });
 
 const RESERVE_MINUTES = 30;
 
 export async function createCheckout(buyer: User, raw: unknown) {
   assertBuyerEligible(buyer);
-  const { itemId, quantity: qtyInput } = checkoutSchema.parse(raw);
+  const { itemId, quantity: qtyInput, useWalletYen: useWalletRaw } =
+    checkoutSchema.parse(raw);
 
   const item = await prisma.item.findUnique({
     where: { id: itemId },
@@ -53,8 +60,29 @@ export async function createCheckout(buyer: User, raw: unknown) {
     bulkDiscountPercent: item.bulkDiscountPercent,
   });
 
-  if (price.amountChargedYen < 50) {
+  if (price.amountChargedYen < 1) {
     throw new ApiError(400, "決済金額が小さすぎます", "AMOUNT_TOO_SMALL");
+  }
+
+  const wallet = await ensureWallet(buyer.id);
+  const requestedWallet = Math.max(0, useWalletRaw ?? 0);
+  const walletPaidYen = Math.min(
+    requestedWallet,
+    wallet.balanceYen,
+    price.amountChargedYen,
+  );
+  const stripePaidYen = price.amountChargedYen - walletPaidYen;
+
+  let paymentMethod: PaymentMethod = "STRIPE";
+  if (walletPaidYen > 0 && stripePaidYen === 0) paymentMethod = "WALLET";
+  else if (walletPaidYen > 0 && stripePaidYen > 0) paymentMethod = "MIXED";
+
+  if (stripePaidYen > 0 && stripePaidYen < 50) {
+    throw new ApiError(
+      400,
+      "カード支払額が50円未満になるよ。残高の使い方を調整してね",
+      "STRIPE_AMOUNT_TOO_SMALL",
+    );
   }
 
   const reservedUntil = new Date(Date.now() + RESERVE_MINUTES * 60_000);
@@ -96,6 +124,9 @@ export async function createCheckout(buyer: User, raw: unknown) {
         platformFeePercent: price.platformFeePercent,
         amountChargedYen: price.amountChargedYen,
         sellerPayoutYen: price.sellerPayoutYen,
+        paymentMethod,
+        walletPaidYen,
+        stripePaidYen,
         status: "PENDING_PAYMENT",
         escrowStatus: "NONE",
       },
@@ -111,8 +142,30 @@ export async function createCheckout(buyer: User, raw: unknown) {
       },
     });
 
+    if (walletPaidYen > 0) {
+      await debitWalletForPurchase(tx, {
+        buyerId: buyer.id,
+        amountYen: walletPaidYen,
+        transactionId: txRow.id,
+      });
+    }
+
     return txRow;
   });
+
+  // ウォレット全額払い → 即履行
+  if (paymentMethod === "WALLET") {
+    await fulfillTransactionById(result.id, { stripePaymentIntentId: null });
+    return {
+      transactionId: result.id,
+      paidWithWallet: true as const,
+      amountChargedYen: price.amountChargedYen,
+      walletPaidYen,
+      stripePaidYen: 0,
+      quantity,
+      reservedUntil: reservedUntil.toISOString(),
+    };
+  }
 
   const stripe = getStripe();
   let customerId = buyer.stripeCustomerId;
@@ -128,9 +181,8 @@ export async function createCheckout(buyer: User, raw: unknown) {
     });
   }
 
-  // Separate charges and transfers: プラットフォームが一度受け取り、完了後に Transfer
   const paymentIntent = await stripe.paymentIntents.create({
-    amount: price.amountChargedYen,
+    amount: stripePaidYen,
     currency: "jpy",
     customer: customerId,
     capture_method: "automatic",
@@ -140,6 +192,8 @@ export async function createCheckout(buyer: User, raw: unknown) {
       itemId: item.id,
       buyerId: buyer.id,
       sellerId: item.sellerId,
+      walletPaidYen: String(walletPaidYen),
+      stripePaidYen: String(stripePaidYen),
     },
     automatic_payment_methods: { enabled: true },
   });
@@ -152,19 +206,22 @@ export async function createCheckout(buyer: User, raw: unknown) {
   return {
     transactionId: result.id,
     clientSecret: paymentIntent.client_secret,
+    paidWithWallet: false as const,
     amountChargedYen: price.amountChargedYen,
+    walletPaidYen,
+    stripePaidYen,
     quantity,
     reservedUntil: reservedUntil.toISOString(),
   };
 }
 
-/**
- * 決済成功後: コード割当・即時開示可能化・確認タイマー開始
- */
-export async function fulfillPaidTransaction(paymentIntentId: string) {
+async function fulfillTransactionById(
+  transactionId: string,
+  opts: { stripePaymentIntentId: string | null },
+) {
   const tx = await prisma.transaction.findUnique({
-    where: { stripePaymentIntentId: paymentIntentId },
-    include: { item: true, serialCodes: true },
+    where: { id: transactionId },
+    include: { item: true },
   });
 
   if (!tx) {
@@ -217,7 +274,7 @@ export async function fulfillPaidTransaction(paymentIntentId: string) {
         escrowStatus: "HELD",
         codeRevealedAt: now,
         confirmationDeadlineAt: deadline,
-        stripeChargeId: paymentIntentId,
+        stripeChargeId: opts.stripePaymentIntentId,
       },
     });
 
@@ -227,12 +284,103 @@ export async function fulfillPaidTransaction(paymentIntentId: string) {
         action: "TRANSACTION_FULFILLED",
         entityType: "Transaction",
         entityId: tx.id,
-        metadata: { paymentIntentId, deadline: deadline.toISOString() },
+        metadata: {
+          paymentIntentId: opts.stripePaymentIntentId,
+          deadline: deadline.toISOString(),
+          paymentMethod: tx.paymentMethod,
+        },
       },
     });
   });
 
   return { transactionId: tx.id, alreadyFulfilled: false, deadline };
+}
+
+/**
+ * 決済成功後: コード割当・即時開示可能化・確認タイマー開始
+ */
+export async function fulfillPaidTransaction(paymentIntentId: string) {
+  const tx = await prisma.transaction.findUnique({
+    where: { stripePaymentIntentId: paymentIntentId },
+  });
+
+  if (!tx) {
+    throw new ApiError(404, "取引が見つかりません", "TX_NOT_FOUND");
+  }
+
+  return fulfillTransactionById(tx.id, { stripePaymentIntentId: paymentIntentId });
+}
+
+/**
+ * 決済失敗・キャンセル時: 在庫戻し + ウォレット返金
+ */
+export async function cancelPendingPayment(paymentIntentId: string) {
+  const tx = await prisma.transaction.findUnique({
+    where: { stripePaymentIntentId: paymentIntentId },
+  });
+  if (!tx) {
+    console.warn("cancelPendingPayment: tx not found", paymentIntentId);
+    return { cancelled: false };
+  }
+  if (tx.status !== "PENDING_PAYMENT") {
+    return { cancelled: false, reason: tx.status };
+  }
+
+  await prisma.$transaction(async (db) => {
+    const reserved = await db.serialCode.findMany({
+      where: { transactionId: tx.id, status: "RESERVED" },
+      select: { id: true },
+    });
+
+    if (reserved.length > 0) {
+      await db.serialCode.updateMany({
+        where: { id: { in: reserved.map((c) => c.id) } },
+        data: {
+          status: "AVAILABLE",
+          reservedAt: null,
+          reservedUntil: null,
+          transactionId: null,
+        },
+      });
+
+      await db.item.update({
+        where: { id: tx.itemId },
+        data: {
+          stockAvailable: { increment: reserved.length },
+          status: "ACTIVE",
+          soldOutAt: null,
+        },
+      });
+    }
+
+    if (tx.walletPaidYen > 0) {
+      await creditWalletRefund(db, {
+        buyerId: tx.buyerId,
+        amountYen: tx.walletPaidYen,
+        transactionId: tx.id,
+      });
+    }
+
+    await db.transaction.update({
+      where: { id: tx.id },
+      data: {
+        status: "CANCELLED",
+        escrowStatus: "NONE",
+      },
+    });
+
+    await db.auditLog.create({
+      data: {
+        actorUserId: tx.buyerId,
+        action: "TRANSACTION_PAYMENT_CANCELLED",
+        entityType: "Transaction",
+        entityId: tx.id,
+        metadata: { paymentIntentId },
+      },
+    });
+  });
+
+  return { cancelled: true, transactionId: tx.id };
 }
 
 export async function revealCodesForBuyer(buyerId: string, transactionId: string) {
@@ -274,5 +422,55 @@ export async function revealCodesForBuyer(buyerId: string, transactionId: string
     confirmationDeadlineAt: tx.confirmationDeadlineAt,
     buyerConfirmedAt: tx.buyerConfirmedAt,
     codes,
+  };
+}
+
+export async function getCheckoutSessionForBuyer(
+  buyerId: string,
+  transactionId: string,
+) {
+  const tx = await prisma.transaction.findUnique({
+    where: { id: transactionId },
+    include: {
+      item: { select: { title: true, artistName: true } },
+    },
+  });
+
+  if (!tx || tx.buyerId !== buyerId) {
+    throw new ApiError(404, "取引が見つかりません", "TX_NOT_FOUND");
+  }
+
+  if (tx.status !== "PENDING_PAYMENT") {
+    return {
+      transactionId: tx.id,
+      status: tx.status,
+      needsPayment: false as const,
+      amountChargedYen: tx.amountChargedYen,
+      walletPaidYen: tx.walletPaidYen,
+      stripePaidYen: tx.stripePaidYen,
+      itemTitle: tx.item.title,
+    };
+  }
+
+  if (!tx.stripePaymentIntentId || tx.stripePaidYen <= 0) {
+    throw new ApiError(409, "カード決済が不要な取引です", "NO_CARD_PAYMENT");
+  }
+
+  const stripe = getStripe();
+  const pi = await stripe.paymentIntents.retrieve(tx.stripePaymentIntentId);
+  if (!pi.client_secret) {
+    throw new ApiError(500, "決済情報の取得に失敗しました", "NO_CLIENT_SECRET");
+  }
+
+  return {
+    transactionId: tx.id,
+    status: tx.status,
+    needsPayment: true as const,
+    clientSecret: pi.client_secret,
+    amountChargedYen: tx.amountChargedYen,
+    walletPaidYen: tx.walletPaidYen,
+    stripePaidYen: tx.stripePaidYen,
+    itemTitle: tx.item.title,
+    artistName: tx.item.artistName,
   };
 }
