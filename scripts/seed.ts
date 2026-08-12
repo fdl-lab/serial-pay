@@ -1,0 +1,210 @@
+import { PrismaClient } from "@prisma/client";
+import { createCipheriv, createHmac, randomBytes } from "crypto";
+
+const prisma = new PrismaClient();
+
+function getKey(): Buffer {
+  const raw = process.env.SERIAL_ENCRYPTION_KEY;
+  if (!raw) throw new Error("SERIAL_ENCRYPTION_KEY is not set");
+  const key = Buffer.from(raw, "base64");
+  if (key.length !== 32) throw new Error("SERIAL_ENCRYPTION_KEY must be 32 bytes");
+  return key;
+}
+
+function encryptSerial(plaintext: string): string {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", getKey(), iv);
+  const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return `${iv.toString("base64")}.${tag.toString("base64")}.${encrypted.toString("base64")}`;
+}
+
+function hashSerial(plaintext: string): string {
+  const pepper = process.env.SERIAL_CODE_HASH_PEPPER;
+  if (!pepper) throw new Error("SERIAL_CODE_HASH_PEPPER is not set");
+  return createHmac("sha256", pepper).update(plaintext.trim().toUpperCase()).digest("hex");
+}
+
+async function main() {
+  const buyer = await prisma.user.upsert({
+    where: { email: "buyer@example.com" },
+    update: {},
+    create: {
+      email: "buyer@example.com",
+      displayName: "デモ購入者",
+      phoneE164: "+819012345678",
+      phoneVerified: true,
+      ekycStatus: "APPROVED",
+      ekycVerifiedAt: new Date(),
+      ratingScore: 5,
+    },
+  });
+
+  const seller = await prisma.user.upsert({
+    where: { email: "seller@example.com" },
+    update: {},
+    create: {
+      email: "seller@example.com",
+      displayName: "デモ出品者",
+      phoneE164: "+819087654321",
+      phoneVerified: true,
+      ekycStatus: "APPROVED",
+      ekycVerifiedAt: new Date(),
+      stripeConnectAccountId: process.env.SEED_CONNECT_ACCOUNT_ID ?? "acct_replace_me",
+      stripeConnectStatus: "ACTIVE",
+      ratingScore: 4.8,
+      ratingCount: 12,
+    },
+  });
+
+  await prisma.wallet.upsert({
+    where: { userId: buyer.id },
+    update: {},
+    create: { userId: buyer.id, balanceYen: 3000, pendingYen: 0 },
+  });
+
+  await prisma.wallet.upsert({
+    where: { userId: seller.id },
+    update: {},
+    create: { userId: seller.id, balanceYen: 0, pendingYen: 0 },
+  });
+
+  await prisma.marketStat.upsert({
+    where: {
+      eventName_category_windowDays: {
+        eventName: "○○ Live 2026",
+        category: "",
+        windowDays: 14,
+      },
+    },
+    update: { avgPriceYen: 1250, sampleCount: 40, medianPriceYen: 1200 },
+    create: {
+      eventName: "○○ Live 2026",
+      category: "",
+      windowDays: 14,
+      avgPriceYen: 1250,
+      medianPriceYen: 1200,
+      minPriceYen: 900,
+      maxPriceYen: 1800,
+      sampleCount: 40,
+    },
+  });
+
+  const existingDemo = await prisma.item.count({
+    where: { sellerId: seller.id, title: { startsWith: "[デモ]" } },
+  });
+
+  if (existingDemo > 0) {
+    await prisma.item.updateMany({
+      where: { sellerId: seller.id, title: { startsWith: "[デモ] ○○" } },
+      data: { artistName: "Sample Artists" },
+    });
+    await prisma.item.updateMany({
+      where: { sellerId: seller.id, title: { startsWith: "[デモ] ファンクラブ" } },
+      data: { artistName: "Sample Artists" },
+    });
+    await prisma.item.updateMany({
+      where: { sellerId: seller.id, title: { startsWith: "[デモ] グッズ" } },
+      data: { artistName: "△△" },
+    });
+    console.log("既存デモ出品にアーティスト名を補完したよ");
+  }
+
+  if (existingDemo === 0) {
+    const demos = [
+      {
+        title: "[デモ] ○○ Live 2026 シリアル バラ売り",
+        artistName: "Sample Artists",
+        eventName: "○○ Live 2026",
+        listingType: "INVENTORY" as const,
+        unitPriceYen: 1200,
+        codes: [
+          "DEMO-LIVE-0001",
+          "DEMO-LIVE-0002",
+          "DEMO-LIVE-0003",
+          "DEMO-LIVE-0004",
+          "DEMO-LIVE-0005",
+        ],
+        bulk: true,
+      },
+      {
+        title: "[デモ] ファンクラブ先行 セット5枚",
+        artistName: "Sample Artists",
+        eventName: "○○ Live 2026",
+        listingType: "SET" as const,
+        unitPriceYen: 1100,
+        codes: [
+          "DEMO-SET-A1",
+          "DEMO-SET-A2",
+          "DEMO-SET-A3",
+          "DEMO-SET-A4",
+          "DEMO-SET-A5",
+        ],
+        bulk: false,
+      },
+      {
+        title: "[デモ] グッズ応募シリアル 在庫多め",
+        artistName: "△△",
+        eventName: "△△ Expo 2026",
+        listingType: "INVENTORY" as const,
+        unitPriceYen: 800,
+        codes: Array.from(
+          { length: 10 },
+          (_, i) => `DEMO-GOODS-${String(i + 1).padStart(3, "0")}`,
+        ),
+        bulk: true,
+      },
+    ];
+
+    for (const d of demos) {
+      const stock = d.codes.length;
+      const item = await prisma.item.create({
+        data: {
+          sellerId: seller.id,
+          title: d.title,
+          artistName: d.artistName,
+          eventName: d.eventName,
+          listingType: d.listingType,
+          status: "ACTIVE",
+          unitPriceYen: d.unitPriceYen,
+          setQuantity: d.listingType === "SET" ? stock : null,
+          stockTotal: stock,
+          stockAvailable: stock,
+          bulkDiscountEnabled: d.bulk,
+          bulkDiscountMinQty: d.bulk ? 3 : null,
+          bulkDiscountPercent: d.bulk ? 10 : null,
+          suggestedAvgPriceYen: 1250,
+          publishedAt: new Date(),
+        },
+      });
+
+      await prisma.serialCode.createMany({
+        data: d.codes.map((code) => ({
+          itemId: item.id,
+          ciphertext: encryptSerial(code),
+          codeHash: hashSerial(code),
+          payloadKind: "TEXT" as const,
+          status: "AVAILABLE" as const,
+        })),
+      });
+    }
+    console.log(`デモ出品を ${demos.length} 件つくったよ`);
+  } else {
+    console.log("デモ出品は既にあるのでスキップ");
+  }
+
+  console.log("Seed OK");
+  console.log("DEV_USER_ID (buyer) =", buyer.id);
+  console.log("SELLER_USER_ID      =", seller.id);
+  console.log("buyer にはデモ残高 3,000円を入れてあるよ（ウォレット購入テスト用）");
+  console.log("→ .env.local の DEV_USER_ID / NEXT_PUBLIC_DEV_USER_ID に buyer.id を入れてね");
+}
+
+main()
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

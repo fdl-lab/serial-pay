@@ -1,0 +1,473 @@
+// =============================================================================
+// Serial Pay — Prisma Schema
+// 推し活特化型 シリアルコード即時売買 Webアプリ（PWA / モバイルファースト）
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// -----------------------------------------------------------------------------
+// Enums
+// -----------------------------------------------------------------------------
+
+enum EkycStatus {
+  PENDING
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum StripeConnectStatus {
+  NOT_CONNECTED
+  ONBOARDING
+  ACTIVE
+  RESTRICTED
+  DISABLED
+}
+
+enum ListingType {
+  SET
+  INVENTORY
+}
+
+enum ItemStatus {
+  DRAFT
+  ACTIVE
+  SOLD_OUT
+  SUSPENDED
+  ARCHIVED
+}
+
+enum SerialCodeStatus {
+  AVAILABLE
+  RESERVED
+  ASSIGNED
+  DISPUTED
+  INVALID
+}
+
+enum TransactionStatus {
+  PENDING_PAYMENT
+  PAID_ESCROW
+  CONFIRMATION_WINDOW
+  COMPLETED
+  DISPUTED
+  REFUNDED
+  CANCELLED
+  EXPIRED
+}
+
+enum EscrowStatus {
+  NONE
+  HELD // 運営側で留保中
+  RELEASED // 出品者ウォレットへ売上反映済み
+  REFUNDED
+  PARTIAL_REFUND
+}
+
+enum PaymentMethod {
+  STRIPE // カード等
+  WALLET // 売上金残高のみ
+  MIXED // 残高 + Stripe
+}
+
+enum DisputeStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED_REFUND
+  REJECTED
+  WITHDRAWN
+}
+
+enum DisputeReason {
+  CODE_INVALID
+  CODE_ALREADY_USED
+  WRONG_CODE
+  OTHER
+}
+
+enum WalletLedgerType {
+  SALE_CREDIT // 取引完了による売上加算
+  PURCHASE_DEBIT // 残高での購入
+  PAYOUT_DEBIT // 出金（振込申請額）
+  PAYOUT_FEE // 出金手数料 200円
+  REFUND_CREDIT // 返金等
+  ADJUSTMENT // 運営調整
+}
+
+enum PayoutRequestStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+  CANCELLED
+}
+
+enum SerialPayloadKind {
+  TEXT
+  IMAGE
+}
+
+// -----------------------------------------------------------------------------
+// User（NextAuth / Supabase Auth の外部IDを保持）
+// -----------------------------------------------------------------------------
+
+model User {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  email         String  @unique
+  phoneE164     String? @unique
+  phoneVerified Boolean @default(false)
+  displayName   String?
+  avatarUrl     String?
+
+  // Auth プロバイダ連携
+  authProvider   String? // "credentials" | "supabase" | "google" 等
+  authProviderId String? @unique
+
+  // eKYC / SMS
+  ekycStatus         EkycStatus @default(PENDING)
+  ekycProviderId     String?
+  ekycVerifiedAt     DateTime?
+  ekycRejectedReason String?
+
+  // Stripe（購入者 Customer / 出金用 Connect）
+  stripeCustomerId       String?             @unique
+  stripeConnectAccountId String?             @unique
+  stripeConnectStatus    StripeConnectStatus @default(NOT_CONNECTED)
+
+  ratingScore          Decimal @default(0) @db.Decimal(3, 2)
+  ratingCount          Int     @default(0)
+  completedSales       Int     @default(0)
+  completedBuys        Int     @default(0)
+  disputeCountAsBuyer  Int     @default(0)
+  disputeCountAsSeller Int     @default(0)
+  isSuspended          Boolean @default(false)
+  suspendedAt          DateTime?
+  suspendReason        String?
+
+  wallet           Wallet?
+  items            Item[]
+  purchases        Transaction[]   @relation("BuyerTransactions")
+  sales            Transaction[]   @relation("SellerTransactions")
+  disputesFiled    Dispute[]       @relation("DisputeFiler")
+  ratingsGiven     Rating[]        @relation("Rater")
+  ratingsReceived  Rating[]        @relation("Ratee")
+  payoutRequests   PayoutRequest[]
+
+  @@index([ekycStatus])
+  @@index([stripeConnectStatus])
+  @@map("users")
+}
+
+// -----------------------------------------------------------------------------
+// Wallet（アプリ内売上金残高）
+// -----------------------------------------------------------------------------
+
+model Wallet {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 利用可能残高（円）
+  balanceYen Int @default(0)
+  // 出金申請中などロック中の金額
+  pendingYen Int @default(0)
+
+  ledgers        WalletLedger[]
+  payoutRequests PayoutRequest[]
+
+  @@map("wallets")
+}
+
+model WalletLedger {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  walletId String
+  wallet   Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  type          WalletLedgerType
+  amountYen     Int // 符号付き（加算+, 減算-）
+  balanceAfter  Int
+  description   String?
+  transactionId String?
+  payoutRequestId String?
+
+  @@index([walletId, createdAt])
+  @@index([transactionId])
+  @@map("wallet_ledgers")
+}
+
+// -----------------------------------------------------------------------------
+// PayoutRequest（振込申請・手数料一律200円）
+// -----------------------------------------------------------------------------
+
+model PayoutRequest {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId   String
+  user     User   @relation(fields: [userId], references: [id])
+  walletId String
+  wallet   Wallet @relation(fields: [walletId], references: [id])
+
+  // ユーザーが受け取る額
+  amountYen Int
+  // 出金振込手数料（固定200）
+  feeYen    Int @default(200)
+  // ウォレットから差し引く合計 = amountYen + feeYen
+  totalDebitYen Int
+
+  status PayoutRequestStatus @default(PENDING)
+
+  // Stripe Connect 経由の送金・出金
+  stripeTransferId String?
+  stripePayoutId   String?
+  failureReason    String?
+
+  processedAt DateTime?
+
+  @@index([userId, status])
+  @@index([status, createdAt])
+  @@map("payout_requests")
+}
+
+// -----------------------------------------------------------------------------
+// Item（出品）
+// -----------------------------------------------------------------------------
+
+model Item {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sellerId String
+  seller   User   @relation(fields: [sellerId], references: [id])
+
+  title       String
+  description String? @db.Text
+  artistName  String? // アーティスト / グループ名
+  eventName   String?
+  eventDate   DateTime?
+  category    String?
+
+  listingType ListingType
+  status      ItemStatus  @default(DRAFT)
+
+  unitPriceYen Int
+  setQuantity  Int?
+  stockTotal   Int
+  stockAvailable Int
+
+  bulkDiscountEnabled Boolean @default(false)
+  bulkDiscountMinQty  Int?
+  bulkDiscountPercent Int?
+
+  suggestedAvgPriceYen Int?
+  confirmationWindowMinutes Int @default(30)
+
+  publishedAt DateTime?
+  soldOutAt   DateTime?
+
+  serialCodes  SerialCode[]
+  transactions Transaction[]
+
+  @@index([sellerId])
+  @@index([status, listingType])
+  @@index([artistName])
+  @@index([eventName])
+  @@map("items")
+}
+
+// -----------------------------------------------------------------------------
+// SerialCode（暗号化保存）
+// -----------------------------------------------------------------------------
+
+model SerialCode {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  itemId String
+  item   Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  ciphertext  String            @db.Text
+  payloadKind SerialPayloadKind @default(TEXT)
+  storageKey  String?
+  codeHash    String
+
+  status SerialCodeStatus @default(AVAILABLE)
+
+  reservedAt    DateTime?
+  reservedUntil DateTime?
+  assignedAt    DateTime?
+  transactionId String?
+  transaction   Transaction? @relation(fields: [transactionId], references: [id])
+
+  @@unique([itemId, codeHash])
+  @@index([itemId, status])
+  @@index([transactionId])
+  @@index([status, reservedUntil])
+  @@map("serial_codes")
+}
+
+// -----------------------------------------------------------------------------
+// Transaction（取引・エスクロー）
+// -----------------------------------------------------------------------------
+
+model Transaction {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  itemId   String
+  item     Item   @relation(fields: [itemId], references: [id])
+  buyerId  String
+  buyer    User   @relation("BuyerTransactions", fields: [buyerId], references: [id])
+  sellerId String
+  seller   User   @relation("SellerTransactions", fields: [sellerId], references: [id])
+
+  quantity Int
+
+  unitPriceYen       Int
+  subtotalYen        Int
+  discountYen        Int @default(0)
+  platformFeeYen     Int
+  platformFeePercent Int @default(10)
+  amountChargedYen   Int
+  sellerPayoutYen    Int // 手数料10%差引後 → ウォレット加算額
+
+  // 支払い内訳（残高再利用対応）
+  paymentMethod   PaymentMethod @default(STRIPE)
+  walletPaidYen   Int           @default(0)
+  stripePaidYen   Int           @default(0)
+
+  status       TransactionStatus @default(PENDING_PAYMENT)
+  escrowStatus EscrowStatus      @default(NONE)
+
+  stripePaymentIntentId String? @unique
+  stripeChargeId        String?
+  stripeTransferId      String? // 旧フロー互換。現行はウォレット反映が主
+  stripeRefundId        String?
+
+  codeRevealedAt         DateTime?
+  confirmationDeadlineAt DateTime?
+  buyerConfirmedAt       DateTime?
+  autoCompletedAt        DateTime?
+  payoutReleasedAt       DateTime? // ウォレット反映時刻
+
+  serialCodes SerialCode[]
+  dispute     Dispute?
+  ratings     Rating[]
+
+  @@index([buyerId, status])
+  @@index([sellerId, status])
+  @@index([itemId])
+  @@index([status, confirmationDeadlineAt])
+  @@map("transactions")
+}
+
+// -----------------------------------------------------------------------------
+// Dispute
+// -----------------------------------------------------------------------------
+
+model Dispute {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactionId String      @unique
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+  filerId       String
+  filer         User        @relation("DisputeFiler", fields: [filerId], references: [id])
+
+  reason      DisputeReason
+  description String?       @db.Text
+
+  screenRecordingUrl   String
+  screenRecordingKey   String?
+  recordingDurationSec Int?
+  recordingUploadedAt  DateTime @default(now())
+
+  status DisputeStatus @default(SUBMITTED)
+
+  reviewStartedAt DateTime?
+  reviewedAt      DateTime?
+  reviewerNote    String?   @db.Text
+  resolutionNote  String?   @db.Text
+  filedWithinWindow Boolean @default(true)
+
+  @@index([status])
+  @@index([filerId])
+  @@map("disputes")
+}
+
+// -----------------------------------------------------------------------------
+// Rating / MarketStat / AuditLog
+// -----------------------------------------------------------------------------
+
+model Rating {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+  raterId       String
+  rater         User         @relation("Rater", fields: [raterId], references: [id])
+  rateeId       String
+  ratee         User         @relation("Ratee", fields: [rateeId], references: [id])
+
+  score   Int
+  comment String?
+
+  @@unique([transactionId, raterId])
+  @@index([rateeId])
+  @@map("ratings")
+}
+
+model MarketStat {
+  id        String   @id @default(cuid())
+  updatedAt DateTime @updatedAt
+
+  eventName      String
+  category       String?
+  sampleCount    Int
+  avgPriceYen    Int
+  medianPriceYen Int?
+  minPriceYen    Int?
+  maxPriceYen    Int?
+  windowDays     Int @default(14)
+
+  @@unique([eventName, category, windowDays])
+  @@map("market_stats")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  actorUserId String?
+  action      String
+  entityType  String
+  entityId    String?
+  metadata    Json?
+  ipAddress   String?
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

@@ -1,0 +1,41 @@
+{
+  "name": "serial-pay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "推し活特化型 シリアルコード即時売買プラットフォーム",
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "lint": "next lint",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio",
+    "db:seed": "tsx scripts/seed.ts",
+    "jobs:auto-complete": "tsx scripts/auto-complete.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.5.0",
+    "@stripe/react-stripe-js": "^3.5.0",
+    "@stripe/stripe-js": "^5.7.0",
+    "@supabase/ssr": "^0.12.4",
+    "@supabase/supabase-js": "^2.112.3",
+    "next": "^15.2.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "stripe": "^17.7.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^22.13.10",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "postcss": "^8.5.26",
+    "prisma": "^6.5.0",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}

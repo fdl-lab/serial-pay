@@ -1,0 +1,80 @@
+@import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap");
+
+@theme {
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --color-ink: #12151c;
+  --color-ink-soft: #3a4254;
+  --color-paper: #f7f4ef;
+  --color-mint: #00c2a8;
+  --color-mint-deep: #009882;
+  --color-coral: #ff5a4e;
+}
+
+@layer base {
+  html,
+  body {
+    @apply min-h-full font-sans text-ink antialiased;
+    background:
+      radial-gradient(1200px 600px at 10% -10%, rgba(0, 194, 168, 0.18), transparent 55%),
+      radial-gradient(900px 500px at 100% 0%, rgba(255, 90, 78, 0.12), transparent 50%),
+      linear-gradient(180deg, #efeae2 0%, var(--color-paper) 40%, #f3f0ea 100%);
+  }
+}
+
+@layer components {
+  .shell {
+    @apply mx-auto w-[min(920px,calc(100%-1.25rem))] px-0 pb-24 pt-6 sm:pb-10 sm:pt-10;
+  }
+
+  .brand-mark {
+    @apply mb-1 text-sm font-extrabold tracking-wide text-mint-deep;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-primary {
+    @apply bg-ink text-white shadow-lg shadow-ink/20 hover:bg-black;
+  }
+
+  .btn-ghost {
+    @apply border border-ink/15 bg-transparent text-ink;
+  }
+
+  .btn-block {
+    @apply w-full;
+  }
+
+  .card-surface {
+    @apply rounded-2xl border border-ink/10 bg-white/90 p-4 shadow-[0_18px_50px_rgba(18,21,28,0.08)] backdrop-blur sm:p-6;
+  }
+
+  .field {
+    @apply mb-4 block;
+  }
+
+  .field > span {
+    @apply mb-1.5 block text-sm font-semibold;
+  }
+
+  .field input,
+  .field textarea,
+  .field select {
+    @apply w-full rounded-xl border border-ink/15 bg-white px-3.5 py-3 font-sans text-base outline-none ring-mint/40 focus:ring-2;
+  }
+
+  .field textarea {
+    @apply font-mono text-sm;
+  }
+
+  .banner-error {
+    @apply mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700;
+  }
+
+  .banner-ok {
+    @apply mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800;
+  }
+}
