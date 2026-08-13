@@ -1,19 +1,18 @@
 import { randomUUID } from "crypto";
-import { mkdir, writeFile, readFile } from "fs/promises";
-import path from "path";
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { ApiError } from "@/lib/api";
 
 export const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+/** data URL フォールバック用（圧縮後を想定） */
+export const AVATAR_DATA_URL_MAX_BYTES = 400 * 1024;
 
 export const AVATAR_ALLOWED_MIME = new Set([
   "image/jpeg",
   "image/png",
   "image/webp",
   "image/gif",
+  "image/jpg",
 ]);
-
-const LOCAL_ROOT = path.join(process.cwd(), "uploads", "avatars");
 
 function s3Configured() {
   return Boolean(
@@ -42,9 +41,28 @@ function extForMime(mime: string) {
   return "jpg";
 }
 
+export function inferImageMime(fileName: string, declaredType: string): string {
+  const t = (declaredType || "").toLowerCase().trim();
+  if (AVATAR_ALLOWED_MIME.has(t)) {
+    return t === "image/jpg" ? "image/jpeg" : t;
+  }
+  const lower = fileName.toLowerCase();
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".webp")) return "image/webp";
+  if (lower.endsWith(".gif")) return "image/gif";
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  return "";
+}
+
 export function assertAvatarMeta(opts: { contentType: string; size: number }) {
-  if (!AVATAR_ALLOWED_MIME.has(opts.contentType)) {
-    throw new ApiError(400, "画像は JPEG / PNG / WebP / GIF にしてね", "INVALID_MEDIA_TYPE");
+  const mime =
+    opts.contentType === "image/jpg" ? "image/jpeg" : opts.contentType;
+  if (!AVATAR_ALLOWED_MIME.has(mime)) {
+    throw new ApiError(
+      400,
+      "画像は JPEG / PNG / WebP / GIF にしてね（iPhoneは「互換性のあるフォーマット」で保存してみて）",
+      "INVALID_MEDIA_TYPE",
+    );
   }
   if (opts.size <= 0 || opts.size > AVATAR_MAX_BYTES) {
     throw new ApiError(400, "プロフィール画像は2MB以内にしてね", "FILE_TOO_LARGE");
@@ -55,13 +73,18 @@ export async function uploadAvatar(opts: {
   userId: string;
   buffer: Buffer;
   contentType: string;
+  fileName?: string;
 }) {
+  const contentType =
+    inferImageMime(opts.fileName ?? "", opts.contentType) || opts.contentType;
+
   assertAvatarMeta({
-    contentType: opts.contentType,
+    contentType,
     size: opts.buffer.byteLength,
   });
 
-  const ext = extForMime(opts.contentType);
+  const mime = contentType === "image/jpg" ? "image/jpeg" : contentType;
+  const ext = extForMime(mime);
   const objectKey = `${opts.userId}/${randomUUID()}.${ext}`;
 
   if (s3Configured()) {
@@ -72,7 +95,7 @@ export async function uploadAvatar(opts: {
         Bucket: bucket,
         Key: `avatars/${objectKey}`,
         Body: opts.buffer,
-        ContentType: opts.contentType,
+        ContentType: mime,
       }),
     );
     const base = process.env.S3_PUBLIC_BASE_URL?.replace(/\/$/, "");
@@ -82,24 +105,15 @@ export async function uploadAvatar(opts: {
     return { key: `avatars/${objectKey}`, url };
   }
 
-  const absDir = path.join(LOCAL_ROOT, opts.userId);
-  await mkdir(absDir, { recursive: true });
-  const filename = `${randomUUID()}.${ext}`;
-  await writeFile(path.join(absDir, filename), opts.buffer);
-
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "http://127.0.0.1:3000").replace(
-    /\/$/,
-    "",
-  );
-  return {
-    key: `local/${opts.userId}/${filename}`,
-    url: `${appUrl}/api/media/avatars/${opts.userId}/${filename}`,
-  };
-}
-
-export async function readLocalAvatar(userId: string, filename: string) {
-  if (userId.includes("..") || filename.includes("..") || filename.includes("/")) {
-    throw new ApiError(400, "不正なパスです", "BAD_PATH");
+  // Vercel など永続FSがない環境向け: 圧縮済み画像を data URL で保持
+  if (opts.buffer.byteLength > AVATAR_DATA_URL_MAX_BYTES) {
+    throw new ApiError(
+      400,
+      "画像が大きすぎるよ。もう一度選び直すか、別の写真を試してね",
+      "FILE_TOO_LARGE",
+    );
   }
-  return readFile(path.join(LOCAL_ROOT, userId, filename));
+
+  const url = `data:${mime};base64,${opts.buffer.toString("base64")}`;
+  return { key: `data:${opts.userId}/${objectKey}`, url };
 }

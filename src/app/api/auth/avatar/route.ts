@@ -10,15 +10,20 @@ export async function POST(req: Request) {
     const user = await requireUser(req);
     const form = await req.formData();
     const file = form.get("file");
-    if (!(file instanceof File)) {
+    if (!(file instanceof Blob)) {
       throw new ApiError(400, "画像を選んでね", "FILE_REQUIRED");
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
+    const fileName =
+      typeof File !== "undefined" && file instanceof File ? file.name : "avatar.jpg";
+    const contentType = file.type || "image/jpeg";
+
     const uploaded = await uploadAvatar({
       userId: user.id,
       buffer,
-      contentType: file.type || "image/jpeg",
+      contentType,
+      fileName,
     });
 
     const updated = await prisma.user.update({

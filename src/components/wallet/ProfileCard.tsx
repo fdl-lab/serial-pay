@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/auth/fetch";
+import { compressAvatarFile } from "@/lib/image/compress-avatar";
 import type { VerificationStatus } from "@/types/auth";
 
 const EKYC_LABEL: Record<string, string> = {
@@ -75,8 +76,9 @@ export function ProfileCard() {
     setError(null);
     setMsg(null);
     try {
+      const compressed = await compressAvatarFile(file);
       const form = new FormData();
-      form.append("file", file);
+      form.append("file", compressed);
       const res = await apiFetch("/api/auth/avatar", { method: "POST", body: form });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "アップロード失敗");
@@ -141,13 +143,17 @@ export function ProfileCard() {
           )}
         </div>
         <label className="btn btn-ghost cursor-pointer !px-3 !py-2 text-xs">
-          画像を変更
+          {busy ? "更新中…" : "画像を変更"}
           <input
             type="file"
-            accept="image/jpeg,image/png,image/webp,image/gif"
+            accept="image/jpeg,image/png,image/webp,image/gif,image/*"
             className="hidden"
             disabled={busy}
-            onChange={(e) => void onAvatarChange(e.target.files?.[0] ?? null)}
+            onChange={(e) => {
+              const f = e.target.files?.[0] ?? null;
+              e.target.value = "";
+              void onAvatarChange(f);
+            }}
           />
         </label>
       </div>
