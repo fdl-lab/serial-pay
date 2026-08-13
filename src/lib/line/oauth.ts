@@ -5,15 +5,44 @@ export type LineProfile = {
   email?: string | null;
 };
 
-function requireLineConfig() {
+function isLocalHostUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.hostname === "localhost" || u.hostname === "127.0.0.1";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * コールバックURLを解決する。
+ * 本番で localhost の env が残っていても、リクエスト origin を優先する。
+ */
+export function resolveLineCallbackUrl(requestOrigin?: string | null): string {
+  const configured = process.env.LINE_CALLBACK_URL?.trim();
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
+  const origin = (requestOrigin || "").replace(/\/$/, "");
+
+  if (configured) {
+    // 本番リクエストなのに env がローカルのまま → origin を使う
+    if (origin && !isLocalHostUrl(origin) && isLocalHostUrl(configured)) {
+      return `${origin}/api/auth/line/callback`;
+    }
+    return configured;
+  }
+
+  if (origin) return `${origin}/api/auth/line/callback`;
+  if (appUrl) return `${appUrl}/api/auth/line/callback`;
+  return "http://127.0.0.1:3000/api/auth/line/callback";
+}
+
+function requireLineConfig(requestOrigin?: string | null) {
   const channelId = process.env.LINE_CHANNEL_ID;
   const channelSecret = process.env.LINE_CHANNEL_SECRET;
   if (!channelId || !channelSecret) {
     throw new Error("LINE_CHANNEL_ID / LINE_CHANNEL_SECRET が未設定です");
   }
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://127.0.0.1:3000";
-  const callbackUrl =
-    process.env.LINE_CALLBACK_URL ?? `${appUrl.replace(/\/$/, "")}/api/auth/line/callback`;
+  const callbackUrl = resolveLineCallbackUrl(requestOrigin);
   return { channelId, channelSecret, callbackUrl };
 }
 
@@ -21,23 +50,29 @@ export function isLineConfigured(): boolean {
   return Boolean(process.env.LINE_CHANNEL_ID && process.env.LINE_CHANNEL_SECRET);
 }
 
-export function buildLineAuthorizeUrl(state: string): string {
-  const { channelId, callbackUrl } = requireLineConfig();
+export function buildLineAuthorizeUrl(
+  state: string,
+  requestOrigin?: string | null,
+): string {
+  const { channelId, callbackUrl } = requireLineConfig(requestOrigin);
   const params = new URLSearchParams({
     response_type: "code",
     client_id: channelId,
     redirect_uri: callbackUrl,
     state,
-    scope: "profile openid email",
+    scope: "profile openid",
   });
   return `https://access.line.me/oauth2/v2.1/authorize?${params.toString()}`;
 }
 
-export async function exchangeLineCode(code: string): Promise<{
+export async function exchangeLineCode(
+  code: string,
+  requestOrigin?: string | null,
+): Promise<{
   accessToken: string;
   idToken?: string;
 }> {
-  const { channelId, channelSecret, callbackUrl } = requireLineConfig();
+  const { channelId, channelSecret, callbackUrl } = requireLineConfig(requestOrigin);
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code,
@@ -58,7 +93,9 @@ export async function exchangeLineCode(code: string): Promise<{
     error_description?: string;
   };
   if (!res.ok || !json.access_token) {
-    throw new Error(json.error_description || json.error || "LINE token exchange failed");
+    throw new Error(
+      `LINE token exchange failed: ${json.error_description || json.error || res.status} (redirect_uri=${callbackUrl})`,
+    );
   }
   return { accessToken: json.access_token, idToken: json.id_token };
 }

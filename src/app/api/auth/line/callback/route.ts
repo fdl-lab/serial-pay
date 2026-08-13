@@ -22,6 +22,7 @@ export async function GET(req: Request) {
   const cookieStore = await cookies();
   const savedState = cookieStore.get("line_oauth_state")?.value;
   const next = cookieStore.get("line_oauth_next")?.value || "/verify";
+  const savedRedirectUri = cookieStore.get("line_oauth_redirect_uri")?.value;
   const safeNext = next.startsWith("/") ? next : "/verify";
 
   if (!savedState || savedState !== state) {
@@ -29,7 +30,12 @@ export async function GET(req: Request) {
   }
 
   try {
-    const { accessToken } = await exchangeLineCode(code);
+    // authorize 時と同じ redirect_uri を優先（env の localhost ズレを防ぐ）
+    const requestOriginForToken = savedRedirectUri
+      ? new URL(savedRedirectUri).origin
+      : origin;
+
+    const { accessToken } = await exchangeLineCode(code, requestOriginForToken);
     const profile = await fetchLineProfile(accessToken);
     const { user, created } = await syncLineUser(profile);
 
@@ -43,6 +49,7 @@ export async function GET(req: Request) {
     res.cookies.set(session);
     res.cookies.set("line_oauth_state", "", { path: "/", maxAge: 0 });
     res.cookies.set("line_oauth_next", "", { path: "/", maxAge: 0 });
+    res.cookies.set("line_oauth_redirect_uri", "", { path: "/", maxAge: 0 });
     return res;
   } catch (e) {
     console.error("LINE callback failed", e);

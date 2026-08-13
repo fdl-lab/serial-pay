@@ -15,17 +15,20 @@
 http://127.0.0.1:3000/api/auth/line/callback
 ```
 
-本番では:
+本番では（両方登録してOK）:
 
 ```text
-https://your-domain.com/api/auth/line/callback
+https://serial-pay.vercel.app/api/auth/line/callback
+http://127.0.0.1:3000/api/auth/line/callback
 ```
 
 ※ 以前の `https://xxxx.supabase.co/auth/v1/callback` は使わない（削除してOK）
 
-4. 権限: `profile` / `openid`（任意で `email`）
+4. 権限: `profile` / `openid`（email は任意）
 
-## 2. 環境変数（`.env.local`）
+## 2. 環境変数
+
+### ローカル（`.env.local`）
 
 ```env
 LINE_CHANNEL_ID="1234567890"
@@ -34,7 +37,17 @@ LINE_CALLBACK_URL="http://127.0.0.1:3000/api/auth/line/callback"
 NEXT_PUBLIC_APP_URL="http://127.0.0.1:3000"
 ```
 
-サーバーを再起動して反映。
+### 本番（Vercel）
+
+```env
+LINE_CHANNEL_ID="（同じでOK）"
+LINE_CHANNEL_SECRET="（同じでOK）"
+LINE_CALLBACK_URL="https://serial-pay.vercel.app/api/auth/line/callback"
+NEXT_PUBLIC_APP_URL="https://serial-pay.vercel.app"
+```
+
+アプリ側は本番リクエスト時に localhost の callback env が残っていても **リクエスト origin を優先**する。  
+ただし **LINE Developers 側に本番 callback が登録されていないと失敗する**。
 
 ## 3. アプリ側フロー
 
