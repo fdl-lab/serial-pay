@@ -483,7 +483,6 @@ export async function getRevealGateForBuyer(
     confirmationWindowMinutes:
       tx.item.confirmationWindowMinutes || confirmationWindowMinutes(),
     buyerConfirmedAt: tx.buyerConfirmedAt,
-    canCancelUnrevealed: awaitingReveal && tx.status === "PAID_ESCROW",
   };
 }
 
@@ -530,10 +529,7 @@ export async function revealCodesForBuyer(buyerId: string, transactionId: string
       const { cancelUnrevealedTransaction } = await import(
         "@/services/reveal-cancel"
       );
-      await cancelUnrevealedTransaction(tx.id, {
-        reason: "reveal_expired",
-        actorUserId: buyerId,
-      });
+      await cancelUnrevealedTransaction(tx.id, { actorUserId: buyerId });
       throw new ApiError(
         409,
         `開示期限（購入から${holdH}時間）が切れたよ。自動キャンセル・返金したよ`,
@@ -640,7 +636,6 @@ export async function listBuyerPurchases(buyerId: string) {
       itemTitle: tx.item.title,
       artistName: tx.item.artistName,
       eventName: tx.item.eventName,
-      canCancelUnrevealed: awaitingReveal && tx.status === "PAID_ESCROW",
     };
   });
 }

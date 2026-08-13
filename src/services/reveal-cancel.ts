@@ -5,19 +5,13 @@ import { creditWalletRefund } from "@/services/wallet";
 import { applyRevealExpiredBuyerPenalty } from "@/services/rating";
 import { createUserMessage } from "@/services/messages";
 
-export type UnrevealedCancelReason = "buyer_cancel" | "reveal_expired";
-
 /**
- * 開示前（PAID_ESCROW）のキャンセル。
- * - buyer_cancel: 購入者都合（評価ペナルティなし）
- * - reveal_expired: 開示期限切れの強制キャンセル（購入者に評価1）
+ * 開示前（PAID_ESCROW）の強制キャンセル（開示期限切れのみ）。
+ * 購入者からの任意キャンセルは不可。返金＋在庫戻し＋購入者評価★1。
  */
 export async function cancelUnrevealedTransaction(
   transactionId: string,
-  opts: {
-    reason: UnrevealedCancelReason;
-    actorUserId?: string | null;
-  },
+  opts?: { actorUserId?: string | null },
 ) {
   const tx = await prisma.transaction.findUnique({
     where: { id: transactionId },
@@ -33,23 +27,17 @@ export async function cancelUnrevealedTransaction(
   if (tx.status !== "PAID_ESCROW" || tx.codeRevealedAt) {
     throw new ApiError(
       409,
-      "開示前の保留中だけキャンセルできるよ",
+      "開示前の保留中だけ期限切れ処理できるよ",
       "INVALID_STATE",
     );
   }
 
-  if (opts.reason === "buyer_cancel" && opts.actorUserId !== tx.buyerId) {
-    throw new ApiError(403, "自分の購入だけキャンセルできるよ", "FORBIDDEN");
-  }
-
-  if (opts.reason === "reveal_expired") {
-    const holdH = revealHoldHours();
-    const deadline =
-      tx.revealDeadlineAt ??
-      new Date(tx.createdAt.getTime() + holdH * 60 * 60_000);
-    if (deadline > new Date()) {
-      throw new ApiError(409, "まだ開示期限前だよ", "NOT_EXPIRED");
-    }
+  const holdH = revealHoldHours();
+  const deadline =
+    tx.revealDeadlineAt ??
+    new Date(tx.createdAt.getTime() + holdH * 60 * 60_000);
+  if (deadline > new Date()) {
+    throw new ApiError(409, "まだ開示期限前だよ", "NOT_EXPIRED");
   }
 
   let refundId: string | null = null;
@@ -63,7 +51,7 @@ export async function cancelUnrevealedTransaction(
       amount: tx.stripePaidYen,
       metadata: {
         transactionId: tx.id,
-        reason: opts.reason,
+        reason: "reveal_expired",
       },
     });
     refundId = refund.id;
@@ -73,8 +61,6 @@ export async function cancelUnrevealedTransaction(
     where: { transactionId: tx.id },
     select: { id: true },
   });
-
-  const nextStatus = opts.reason === "reveal_expired" ? "EXPIRED" : "CANCELLED";
 
   await prisma.$transaction(async (db) => {
     if (codes.length > 0) {
@@ -103,17 +89,14 @@ export async function cancelUnrevealedTransaction(
         buyerId: tx.buyerId,
         amountYen: tx.walletPaidYen,
         transactionId: tx.id,
-        description:
-          opts.reason === "reveal_expired"
-            ? "開示期限切れによる残高返金"
-            : "開示前キャンセルによる残高返金",
+        description: "開示期限切れによる残高返金",
       });
     }
 
     await db.transaction.update({
       where: { id: tx.id },
       data: {
-        status: nextStatus,
+        status: "EXPIRED",
         escrowStatus: "REFUNDED",
         stripeRefundId: refundId,
       },
@@ -121,15 +104,12 @@ export async function cancelUnrevealedTransaction(
 
     await db.auditLog.create({
       data: {
-        actorUserId: opts.actorUserId ?? null,
-        action:
-          opts.reason === "reveal_expired"
-            ? "TRANSACTION_REVEAL_EXPIRED"
-            : "TRANSACTION_UNREVEALED_CANCELLED",
+        actorUserId: opts?.actorUserId ?? null,
+        action: "TRANSACTION_REVEAL_EXPIRED",
         entityType: "Transaction",
         entityId: tx.id,
         metadata: {
-          reason: opts.reason,
+          reason: "reveal_expired",
           refundId,
           restoredCodes: codes.length,
         },
@@ -137,71 +117,47 @@ export async function cancelUnrevealedTransaction(
     });
   });
 
-  if (opts.reason === "reveal_expired") {
-    await applyRevealExpiredBuyerPenalty({
-      transactionId: tx.id,
-      sellerId: tx.sellerId,
-      buyerId: tx.buyerId,
-    });
-  }
+  await applyRevealExpiredBuyerPenalty({
+    transactionId: tx.id,
+    sellerId: tx.sellerId,
+    buyerId: tx.buyerId,
+  });
 
-  const holdH = revealHoldHours();
   await createUserMessage({
     userId: tx.buyerId,
-    kind:
-      opts.reason === "reveal_expired"
-        ? "REVEAL_EXPIRED"
-        : "UNREVEALED_CANCELLED",
-    title:
-      opts.reason === "reveal_expired"
-        ? "開示期限が切れてキャンセルされたよ"
-        : "購入をキャンセルしたよ",
-    body:
-      opts.reason === "reveal_expired"
-        ? [
-            `「${tx.item.title}」は購入から${holdH}時間以内に開示されなかったため、自動キャンセル・返金したよ。`,
-            "開示期限切れのため、購入者評価に★1が記録されたよ。",
-          ].join("\n")
-        : `「${tx.item.title}」の開示前キャンセルを受け付けたよ。返金手続きをしたよ。`,
+    kind: "REVEAL_EXPIRED",
+    title: "開示期限が切れてキャンセルされたよ",
+    body: [
+      `「${tx.item.title}」は購入から${holdH}時間以内に開示されなかったため、自動キャンセル・返金したよ。`,
+      "開示期限切れのため、購入者評価に★1が記録されたよ。",
+    ].join("\n"),
     linkHref: "/me",
     linkLabel: "マイページを見る",
     relatedEntityType: "Transaction",
     relatedEntityId: tx.id,
   });
 
-  if (opts.reason === "reveal_expired") {
-    await createUserMessage({
-      userId: tx.sellerId,
-      kind: "REVEAL_EXPIRED_SELLER",
-      title: "未開示のまま期限切れになったよ",
-      body: [
-        `「${tx.item.title}」は購入者が開示せず期限切れになったよ。`,
-        "在庫は戻してあるよ。購入者には評価★1が付いたよ。",
-      ].join("\n"),
-      linkHref: "/me",
-      linkLabel: "マイページを見る",
-      relatedEntityType: "Transaction",
-      relatedEntityId: tx.id,
-    });
-  }
+  await createUserMessage({
+    userId: tx.sellerId,
+    kind: "REVEAL_EXPIRED_SELLER",
+    title: "未開示のまま期限切れになったよ",
+    body: [
+      `「${tx.item.title}」は購入者が開示せず期限切れになったよ。`,
+      "在庫は戻してあるよ。購入者には評価★1が付いたよ。",
+    ].join("\n"),
+    linkHref: "/me",
+    linkLabel: "マイページを見る",
+    relatedEntityType: "Transaction",
+    relatedEntityId: tx.id,
+  });
 
   return {
     transactionId: tx.id,
     alreadyCancelled: false as const,
-    status: nextStatus,
+    status: "EXPIRED" as const,
     refundId,
-    penaltyApplied: opts.reason === "reveal_expired",
+    penaltyApplied: true,
   };
-}
-
-export async function cancelUnrevealedByBuyer(
-  buyerId: string,
-  transactionId: string,
-) {
-  return cancelUnrevealedTransaction(transactionId, {
-    reason: "buyer_cancel",
-    actorUserId: buyerId,
-  });
 }
 
 /** Cron: 開示期限切れの PAID_ESCROW を強制キャンセル */
@@ -226,10 +182,7 @@ export async function expireUnrevealedTransactions() {
   const results = [];
   for (const row of rows) {
     try {
-      const r = await cancelUnrevealedTransaction(row.id, {
-        reason: "reveal_expired",
-        actorUserId: null,
-      });
+      const r = await cancelUnrevealedTransaction(row.id);
       results.push(r);
     } catch (e) {
       console.error("expireUnrevealed failed", row.id, e);

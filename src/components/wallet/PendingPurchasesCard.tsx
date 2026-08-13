@@ -19,7 +19,6 @@ type Purchase = {
   itemTitle: string;
   artistName: string | null;
   eventName: string | null;
-  canCancelUnrevealed?: boolean;
 };
 
 function formatDeadline(iso: string | null) {
@@ -37,7 +36,6 @@ function formatDeadline(iso: string | null) {
 export function PendingPurchasesCard() {
   const [purchases, setPurchases] = useState<Purchase[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -61,30 +59,6 @@ export function PendingPurchasesCard() {
     void load();
   }, [load]);
 
-  async function cancelUnrevealed(id: string) {
-    if (
-      !window.confirm(
-        "開示前の購入をキャンセルするよ。返金されるけど、在庫は出品に戻るよ。いい？",
-      )
-    ) {
-      return;
-    }
-    setBusyId(id);
-    setError(null);
-    try {
-      const res = await apiFetch(`/api/transactions/${id}/cancel-unrevealed`, {
-        method: "POST",
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "キャンセルに失敗したよ");
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "エラー");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
   if (error) {
     return <p className="banner-error">{error}</p>;
   }
@@ -105,7 +79,7 @@ export function PendingPurchasesCard() {
       <div>
         <h2 className="text-lg font-bold">開示前・確認中のシリアル</h2>
         <p className="mt-1 text-sm text-ink-soft">
-          保留は購入から72時間まで。過ぎると自動キャンセル・返金（評価★1）になるよ
+          購入後のキャンセルはできないよ。開示は購入から72時間まで保留できるけど、過ぎると自動キャンセル・返金（評価★1）になるよ
         </p>
       </div>
 
@@ -122,35 +96,23 @@ export function PendingPurchasesCard() {
             {pendingReveal.map((p) => {
               const until = formatDeadline(p.revealDeadlineAt);
               return (
-                <li key={p.id} className="space-y-2 py-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold">
-                        {p.artistName ? `${p.artistName} · ` : ""}
-                        {p.itemTitle}
-                      </p>
-                      <p className="text-xs text-ink-soft">
-                        {p.quantity}枚 · {formatYen(p.amountChargedYen)} · 未開示
-                        {until ? ` · 開示期限 ${until}` : ""}
-                      </p>
-                    </div>
-                    <Link
-                      href={`/transactions/${p.id}`}
-                      className="btn btn-primary shrink-0 !px-3 !py-2 text-xs"
-                    >
-                      開示する
-                    </Link>
+                <li key={p.id} className="flex items-center justify-between gap-3 py-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold">
+                      {p.artistName ? `${p.artistName} · ` : ""}
+                      {p.itemTitle}
+                    </p>
+                    <p className="text-xs text-ink-soft">
+                      {p.quantity}枚 · {formatYen(p.amountChargedYen)} · 未開示
+                      {until ? ` · 開示期限 ${until}` : ""}
+                    </p>
                   </div>
-                  {p.canCancelUnrevealed && (
-                    <button
-                      type="button"
-                      className="text-xs font-semibold text-ink-soft underline"
-                      disabled={busyId === p.id}
-                      onClick={() => void cancelUnrevealed(p.id)}
-                    >
-                      {busyId === p.id ? "キャンセル中…" : "使わないのでキャンセル（返金）"}
-                    </button>
-                  )}
+                  <Link
+                    href={`/transactions/${p.id}`}
+                    className="btn btn-primary shrink-0 !px-3 !py-2 text-xs"
+                  >
+                    開示する
+                  </Link>
                 </li>
               );
             })}
