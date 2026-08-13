@@ -66,7 +66,7 @@ export function ItemList({
         const rating = item.seller.ratingCount > 0 ? ratingText(item.seller.ratingScore) : null;
         const trial = isTrialListing(item);
         const typeLabel = trial
-          ? "無料で試せるよ"
+          ? "無料でお試しできます"
           : item.listingType === "SET"
             ? `セット ${item.setQuantity ?? item.stockAvailable}枚`
             : `在庫 ${item.stockAvailable}枚 · バラ可`;
