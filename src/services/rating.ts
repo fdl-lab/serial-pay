@@ -8,7 +8,7 @@ const ratingSchema = z.object({
   comment: z.string().trim().max(500).optional(),
 });
 
-async function recalcUserRating(rateeId: string) {
+export async function recalcUserRating(rateeId: string) {
   const agg = await prisma.rating.aggregate({
     where: { rateeId },
     _avg: { score: true },
@@ -21,6 +21,37 @@ async function recalcUserRating(rateeId: string) {
       ratingCount: agg._count._all,
     },
   });
+}
+
+/**
+ * 開示期限切れの強制キャンセル時: 出品者→購入者の評価1を付与
+ */
+export async function applyRevealExpiredBuyerPenalty(params: {
+  transactionId: string;
+  sellerId: string;
+  buyerId: string;
+}) {
+  const existing = await prisma.rating.findUnique({
+    where: {
+      transactionId_raterId: {
+        transactionId: params.transactionId,
+        raterId: params.sellerId,
+      },
+    },
+  });
+  if (existing) return existing;
+
+  const rating = await prisma.rating.create({
+    data: {
+      transactionId: params.transactionId,
+      raterId: params.sellerId,
+      rateeId: params.buyerId,
+      score: 1,
+      comment: "開示期限切れによる自動キャンセル",
+    },
+  });
+  await recalcUserRating(params.buyerId);
+  return rating;
 }
 
 /**

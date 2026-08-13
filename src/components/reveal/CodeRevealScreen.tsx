@@ -41,6 +41,9 @@ export function CodeRevealScreen({
   const [confirmed, setConfirmed] = useState(false);
   const [completed, setCompleted] = useState(false);
   const [gateMinutes, setGateMinutes] = useState(windowMinutes);
+  const [revealDeadlineAt, setRevealDeadlineAt] = useState<string | null>(null);
+  const [canCancelUnrevealed, setCanCancelUnrevealed] = useState(false);
+  const [cancelBusy, setCancelBusy] = useState(false);
 
   // 先に状態だけ見る（ここではタイマーを開始しない）
   useEffect(() => {
@@ -56,6 +59,8 @@ export function CodeRevealScreen({
         if (typeof json.confirmationWindowMinutes === "number") {
           setGateMinutes(json.confirmationWindowMinutes);
         }
+        setRevealDeadlineAt(json.revealDeadlineAt ?? null);
+        setCanCancelUnrevealed(Boolean(json.canCancelUnrevealed));
         if (json.awaitingReveal) {
           // 未開示 → 注釈。タイマーはまだ開始しない
           setAccepted(false);
@@ -135,6 +140,31 @@ export function CodeRevealScreen({
   function deferReveal() {
     setDeferred(true);
     router.push("/me");
+  }
+
+  async function cancelUnrevealed() {
+    if (
+      !window.confirm(
+        "開示前の購入をキャンセルするよ。返金されるけど、在庫は出品に戻るよ。いい？",
+      )
+    ) {
+      return;
+    }
+    setCancelBusy(true);
+    setError(null);
+    try {
+      const res = await apiFetch(
+        `/api/transactions/${transactionId}/cancel-unrevealed`,
+        { method: "POST" },
+      );
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "キャンセルに失敗したよ");
+      router.push("/me");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "エラーが発生しました");
+    } finally {
+      setCancelBusy(false);
+    }
   }
 
   const canDispute =
@@ -269,13 +299,37 @@ export function CodeRevealScreen({
       )}
 
       {accepted === false && (
-        <p className="text-center text-sm text-ink-soft">
-          あとで見る場合は{" "}
-          <Link href="/me" className="font-semibold text-mint-deep underline">
-            マイページ
-          </Link>{" "}
-          の「開示前のシリアル」から開けるよ
-        </p>
+        <div className="space-y-3 text-center text-sm text-ink-soft">
+          {revealDeadlineAt && (
+            <p className="rounded-xl bg-coral/10 px-3 py-2 font-semibold text-coral">
+              開示期限{" "}
+              {new Date(revealDeadlineAt).toLocaleString("ja-JP", {
+                month: "numeric",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+              まで（過ぎると自動キャンセル・評価★1）
+            </p>
+          )}
+          <p>
+            あとで見る場合は{" "}
+            <Link href="/me" className="font-semibold text-mint-deep underline">
+              マイページ
+            </Link>{" "}
+            の「開示前のシリアル」から開けるよ
+          </p>
+          {canCancelUnrevealed && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-block min-h-11 text-sm"
+              disabled={cancelBusy}
+              onClick={() => void cancelUnrevealed()}
+            >
+              {cancelBusy ? "キャンセル中…" : "使わないのでキャンセル（返金）"}
+            </button>
+          )}
+        </div>
       )}
     </section>
   );

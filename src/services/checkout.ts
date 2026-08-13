@@ -1,5 +1,9 @@
 import { prisma } from "@/lib/prisma";
-import { getStripe, confirmationWindowMinutes } from "@/lib/stripe";
+import {
+  getStripe,
+  confirmationWindowMinutes,
+  revealHoldHours,
+} from "@/lib/stripe";
 import { calcPriceBreakdown } from "@/lib/money";
 import { ApiError, assertBuyerEligible } from "@/lib/api";
 import { decryptSerial, encryptSerial, hashSerial } from "@/lib/crypto/serial";
@@ -305,12 +309,18 @@ async function fulfillTransactionById(
     });
 
     // 支払完了だが未開示。確認タイマーは初回 reveal 時に開始
+    // 開示前の保留期限（既定72時間）をここでセット
+    const revealDeadlineAt = new Date(
+      now.getTime() + revealHoldHours() * 60 * 60_000,
+    );
+
     await db.transaction.update({
       where: { id: tx.id },
       data: {
         status: "PAID_ESCROW",
         escrowStatus: "HELD",
         stripeChargeId: opts.stripePaymentIntentId,
+        revealDeadlineAt,
       },
     });
 
@@ -324,6 +334,7 @@ async function fulfillTransactionById(
           paymentIntentId: opts.stripePaymentIntentId,
           paymentMethod: tx.paymentMethod,
           awaitingReveal: true,
+          revealDeadlineAt: revealDeadlineAt.toISOString(),
         },
       },
     });
@@ -454,6 +465,10 @@ export async function getRevealGateForBuyer(
   }
 
   const awaitingReveal = tx.status === "PAID_ESCROW" || !tx.codeRevealedAt;
+  const holdH = revealHoldHours();
+  const revealDeadlineAt =
+    tx.revealDeadlineAt ??
+    new Date(tx.createdAt.getTime() + holdH * 60 * 60_000);
 
   return {
     transactionId: tx.id,
@@ -462,10 +477,13 @@ export async function getRevealGateForBuyer(
     status: tx.status,
     awaitingReveal,
     codeRevealedAt: tx.codeRevealedAt,
+    revealDeadlineAt,
+    revealHoldHours: holdH,
     confirmationDeadlineAt: tx.confirmationDeadlineAt,
     confirmationWindowMinutes:
       tx.item.confirmationWindowMinutes || confirmationWindowMinutes(),
     buyerConfirmedAt: tx.buyerConfirmedAt,
+    canCancelUnrevealed: awaitingReveal && tx.status === "PAID_ESCROW",
   };
 }
 
@@ -504,6 +522,25 @@ export async function revealCodesForBuyer(buyerId: string, transactionId: string
 
   // 初回開示: タイマー開始（未開示の PAID_ESCROW のみ）
   if (tx.status === "PAID_ESCROW") {
+    const holdH = revealHoldHours();
+    const revealBy =
+      tx.revealDeadlineAt ??
+      new Date(tx.createdAt.getTime() + holdH * 60 * 60_000);
+    if (revealBy.getTime() <= Date.now()) {
+      const { cancelUnrevealedTransaction } = await import(
+        "@/services/reveal-cancel"
+      );
+      await cancelUnrevealedTransaction(tx.id, {
+        reason: "reveal_expired",
+        actorUserId: buyerId,
+      });
+      throw new ApiError(
+        409,
+        `開示期限（購入から${holdH}時間）が切れたよ。自動キャンセル・返金したよ`,
+        "REVEAL_EXPIRED",
+      );
+    }
+
     const windowMin =
       tx.item.confirmationWindowMinutes || confirmationWindowMinutes();
     const now = new Date();
@@ -580,22 +617,32 @@ export async function listBuyerPurchases(buyerId: string) {
     },
   });
 
-  return rows.map((tx) => ({
-    id: tx.id,
-    status: tx.status,
-    awaitingReveal: tx.status === "PAID_ESCROW" || !tx.codeRevealedAt,
-    awaitingRating:
-      tx.status === "CONFIRMATION_WINDOW" && Boolean(tx.buyerConfirmedAt),
-    buyerConfirmedAt: tx.buyerConfirmedAt,
-    quantity: tx.quantity,
-    amountChargedYen: tx.amountChargedYen,
-    codeRevealedAt: tx.codeRevealedAt,
-    confirmationDeadlineAt: tx.confirmationDeadlineAt,
-    createdAt: tx.createdAt,
-    itemTitle: tx.item.title,
-    artistName: tx.item.artistName,
-    eventName: tx.item.eventName,
-  }));
+  const holdH = revealHoldHours();
+
+  return rows.map((tx) => {
+    const awaitingReveal = tx.status === "PAID_ESCROW" || !tx.codeRevealedAt;
+    const revealDeadlineAt =
+      tx.revealDeadlineAt ??
+      new Date(tx.createdAt.getTime() + holdH * 60 * 60_000);
+    return {
+      id: tx.id,
+      status: tx.status,
+      awaitingReveal,
+      awaitingRating:
+        tx.status === "CONFIRMATION_WINDOW" && Boolean(tx.buyerConfirmedAt),
+      buyerConfirmedAt: tx.buyerConfirmedAt,
+      quantity: tx.quantity,
+      amountChargedYen: tx.amountChargedYen,
+      codeRevealedAt: tx.codeRevealedAt,
+      revealDeadlineAt,
+      confirmationDeadlineAt: tx.confirmationDeadlineAt,
+      createdAt: tx.createdAt,
+      itemTitle: tx.item.title,
+      artistName: tx.item.artistName,
+      eventName: tx.item.eventName,
+      canCancelUnrevealed: awaitingReveal && tx.status === "PAID_ESCROW",
+    };
+  });
 }
 
 export async function getCheckoutSessionForBuyer(

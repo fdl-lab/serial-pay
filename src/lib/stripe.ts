@@ -28,3 +28,10 @@ export function confirmationWindowMinutes(): number {
   if (!Number.isFinite(raw) || raw < 5 || raw > 120) return 30;
   return raw;
 }
+
+/** 開示前の保留期限（購入から何時間）。既定72時間 */
+export function revealHoldHours(): number {
+  const raw = Number(process.env.REVEAL_HOLD_HOURS ?? "72");
+  if (!Number.isFinite(raw) || raw < 1 || raw > 24 * 14) return 72;
+  return raw;
+}

@@ -402,6 +402,8 @@ model Transaction {
   stripeRefundId        String?
 
   codeRevealedAt         DateTime?
+  /** 開示前の保留期限（購入/履行時点）。過ぎると自動キャンセル */
+  revealDeadlineAt       DateTime?
   confirmationDeadlineAt DateTime?
   buyerConfirmedAt       DateTime?
   autoCompletedAt        DateTime?
@@ -415,6 +417,7 @@ model Transaction {
   @@index([sellerId, status])
   @@index([itemId])
   @@index([status, confirmationDeadlineAt])
+  @@index([status, revealDeadlineAt])
   @@map("transactions")
 }
 
