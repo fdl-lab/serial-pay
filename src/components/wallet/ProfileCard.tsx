@@ -324,7 +324,7 @@ function AccountDeleteSection() {
     <div className="border-t border-ink/10 pt-4">
       <button
         type="button"
-        className="min-h-11 w-full rounded-xl border border-coral/40 bg-coral/5 px-3 py-2 text-left text-sm font-bold text-coral"
+        className="text-xs text-ink-soft underline decoration-ink/20 underline-offset-2 transition hover:text-ink disabled:opacity-50"
         disabled={loading}
         onClick={() => void loadStatus()}
       >
