@@ -82,6 +82,12 @@ export async function createDispute(buyerId: string, transactionId: string, raw:
     );
   }
 
+  // 異議中は確認タイマーを停止（残り時間を保存）
+  const pausedRemainingSec = Math.max(
+    0,
+    Math.ceil((tx.confirmationDeadlineAt!.getTime() - now.getTime()) / 1000),
+  );
+
   const dispute = await prisma.$transaction(async (db) => {
     const d = isReapply
       ? await db.dispute.update({
@@ -115,7 +121,11 @@ export async function createDispute(buyerId: string, transactionId: string, raw:
 
     await db.transaction.update({
       where: { id: transactionId },
-      data: { status: "DISPUTED" },
+      data: {
+        status: "DISPUTED",
+        confirmationDeadlineAt: null,
+        confirmationPausedRemainingSec: pausedRemainingSec,
+      },
     });
 
     await db.serialCode.updateMany({
@@ -158,6 +168,7 @@ export async function createDispute(buyerId: string, transactionId: string, raw:
     title: isReapply ? "異議を再申請したよ" : "異議申し立てを受け付けたよ",
     body: [
       `「${itemLabel}」の異議を事務局が確認します。`,
+      "審査中は確認タイマーを止めているよ。",
       `許可された場合、事務局確認後およそ1〜2週間（目安${DISPUTE_REFUND_ETA_DAYS}日以内）でウォレット残高へ返金されます。`,
       "審査にはお時間をいただくことがあるよ。結果はマイページのメッセージでお知らせするね。",
     ].join("\n"),
@@ -262,14 +273,17 @@ export async function resolveDispute(
     return { disputeId, decision, refundId };
   }
 
-  // 却下 → 再申請できるよう確認期間を延長（すぐ出品者送金はしない）
+  // 却下 → 止めていたタイマーを再開。再申請猶予（7日）未満ならそちらまで延長
+  const nowReject = new Date();
+  const resumedFromPause = new Date(
+    nowReject.getTime() +
+      Math.max(0, tx.confirmationPausedRemainingSec ?? 0) * 1000,
+  );
   const reapplyDeadline = new Date(
-    Date.now() + REAPPLY_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+    nowReject.getTime() + REAPPLY_WINDOW_DAYS * 24 * 60 * 60 * 1000,
   );
   const deadline =
-    tx.confirmationDeadlineAt && tx.confirmationDeadlineAt > reapplyDeadline
-      ? tx.confirmationDeadlineAt
-      : reapplyDeadline;
+    resumedFromPause > reapplyDeadline ? resumedFromPause : reapplyDeadline;
 
   await prisma.$transaction(async (db) => {
     await db.dispute.update({
@@ -286,6 +300,7 @@ export async function resolveDispute(
       data: {
         status: "CONFIRMATION_WINDOW",
         confirmationDeadlineAt: deadline,
+        confirmationPausedRemainingSec: null,
       },
     });
 

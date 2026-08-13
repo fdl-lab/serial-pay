@@ -405,6 +405,8 @@ model Transaction {
   /** 開示前の保留期限（購入/履行時点）。過ぎると返金なしで売上確定＋購入者★1 */
   revealDeadlineAt       DateTime?
   confirmationDeadlineAt DateTime?
+  /** 異議中に止めた確認タイマーの残り秒（再開時に使う） */
+  confirmationPausedRemainingSec Int?
   buyerConfirmedAt       DateTime?
   autoCompletedAt        DateTime?
   payoutReleasedAt       DateTime? // ウォレット反映時刻

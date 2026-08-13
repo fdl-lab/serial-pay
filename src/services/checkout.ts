@@ -585,6 +585,8 @@ export async function revealCodesForBuyer(buyerId: string, transactionId: string
     quantity: tx.quantity,
     codeRevealedAt,
     confirmationDeadlineAt,
+    confirmationTimerPaused: status === "DISPUTED",
+    confirmationPausedRemainingSec: tx.confirmationPausedRemainingSec,
     buyerConfirmedAt: tx.buyerConfirmedAt,
     hasRated: Boolean(rated),
     codes,

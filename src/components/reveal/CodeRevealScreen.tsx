@@ -16,6 +16,8 @@ type RevealPayload = {
   quantity: number;
   codeRevealedAt: string | null;
   confirmationDeadlineAt: string | null;
+  confirmationTimerPaused?: boolean;
+  confirmationPausedRemainingSec?: number | null;
   buyerConfirmedAt: string | null;
   hasRated: boolean;
   codes: { id: string; plaintext: string; status: string }[];
@@ -176,15 +178,37 @@ export function CodeRevealScreen({
         <div className="mb-5 grid gap-3 rounded-2xl border border-ink/10 bg-gradient-to-r from-coral/10 to-mint/10 p-4 sm:grid-cols-[auto_1fr] sm:items-center">
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-ink-soft">
-              評価完了まで
+              {data?.status === "DISPUTED" || data?.confirmationTimerPaused
+                ? "確認タイマー"
+                : "評価完了まで"}
             </p>
-            <CountdownTimer deadlineIso={data?.confirmationDeadlineAt ?? null} />
-            <p className="mt-1 text-[11px] font-semibold text-ink-soft">
-              コードを表示したときから計測
-            </p>
+            {data?.status === "DISPUTED" || data?.confirmationTimerPaused ? (
+              <>
+                <p className="font-mono text-2xl font-semibold text-mint-deep">
+                  停止中
+                </p>
+                <p className="mt-1 text-[11px] font-semibold text-ink-soft">
+                  異議審査中のためタイマー停止
+                  {typeof data.confirmationPausedRemainingSec === "number"
+                    ? `（残り約 ${Math.ceil(data.confirmationPausedRemainingSec / 60)} 分）`
+                    : ""}
+                </p>
+              </>
+            ) : (
+              <>
+                <CountdownTimer
+                  deadlineIso={data?.confirmationDeadlineAt ?? null}
+                />
+                <p className="mt-1 text-[11px] font-semibold text-ink-soft">
+                  コードを表示したときから計測
+                </p>
+              </>
+            )}
           </div>
           <p className="text-sm text-ink-soft">
-            受取確認のあと、出品者を評価すると取引完了・売上反映になるよ。期限を過ぎると評価なしでも自動完了するよ。
+            {data?.status === "DISPUTED" || data?.confirmationTimerPaused
+              ? "異議の審査が終わるまで自動完了は進まないよ。結果はメッセージで届くね。"
+              : "受取確認のあと、出品者を評価すると取引完了・売上反映になるよ。期限を過ぎると評価なしでも自動完了するよ。"}
           </p>
         </div>
       )}

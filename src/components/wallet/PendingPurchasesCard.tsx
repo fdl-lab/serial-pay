@@ -136,7 +136,7 @@ export function PendingPurchasesCard() {
                   <p className="text-xs text-ink-soft">
                     {p.quantity}枚 · {formatYen(p.amountChargedYen)}
                     {p.status === "DISPUTED"
-                      ? " · 異議中"
+                      ? " · 異議中（タイマー停止）"
                       : p.awaitingRating
                         ? " · 評価待ち（評価で完了）"
                         : " · 確認期限内"}
