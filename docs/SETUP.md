@@ -17,7 +17,7 @@
 | **Supabase Postgres** | `DATABASE_URL` |
 | 暗号化キー ×2（`openssl rand -base64 32`） | `SERIAL_ENCRYPTION_KEY` / `SERIAL_CODE_HASH_PEPPER` |
 | Stripe API keys + Connect 有効化 | `STRIPE_SECRET_KEY` / `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` |
-| Webhook（`payment_intent.succeeded`） | `STRIPE_WEBHOOK_SECRET` |
+| Webhook（決済 + Identity） | `STRIPE_WEBHOOK_SECRET` ※手順は [STRIPE_WEBHOOK.md](./STRIPE_WEBHOOK.md) |
 | seed 後のユーザーID | `DEV_USER_ID` / `NEXT_PUBLIC_DEV_USER_ID` |
 
 ## 本番追加
