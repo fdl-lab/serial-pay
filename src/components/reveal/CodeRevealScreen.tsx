@@ -173,29 +173,36 @@ export function CodeRevealScreen({
         </ul>
       )}
 
-      {accepted && data && data.status !== "COMPLETED" && data.status !== "DISPUTED" && (
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={!data || busy || confirmed}
-            onClick={confirm}
-          >
-            {confirmed ? "受取確認済み → 評価へ" : "使えたので受取確認する"}
-          </button>
-          {canDispute && (
-            <a
-              className="btn btn-ghost"
-              href={`/transactions/${transactionId}/dispute`}
+      {accepted &&
+        data &&
+        data.status !== "COMPLETED" &&
+        data.status !== "DISPUTED" &&
+        !confirmed && (
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button
+              type="button"
+              className="btn btn-primary btn-block min-h-12 sm:flex-1"
+              disabled={!data || busy}
+              onClick={confirm}
             >
-              使えなかった（異議申し立て）
-            </a>
-          )}
-        </div>
-      )}
+              {busy ? "確認中…" : "使えたので受取確認する"}
+            </button>
+            {canDispute && (
+              <a
+                className="btn btn-ghost btn-block min-h-12 sm:flex-1"
+                href={`/transactions/${transactionId}/dispute`}
+              >
+                使えなかった（異議申し立て）
+              </a>
+            )}
+          </div>
+        )}
 
       {accepted && data && confirmed && !completed && data.status !== "DISPUTED" && (
-        <div className="mt-5">
+        <div className="mt-5 space-y-3">
+          <p className="rounded-xl border border-mint/30 bg-mint/10 px-3 py-2 text-sm font-semibold text-mint-deep">
+            受取確認OK！下の星を選んで「評価して取引完了」を押してね
+          </p>
           <RatingForm
             transactionId={transactionId}
             onDone={() => {

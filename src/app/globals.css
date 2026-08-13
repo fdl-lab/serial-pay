@@ -25,7 +25,9 @@
 
 @layer components {
   .shell {
-    @apply mx-auto w-[min(920px,calc(100%-1.25rem))] px-0 pb-24 pt-6 sm:pt-10;
+    @apply mx-auto w-[min(920px,calc(100%-1.25rem))] px-0 pt-6 sm:pt-10;
+    /* 下部固定ナビ + セーフエリアでボタンが押せなくなるのを防ぐ */
+    padding-bottom: calc(6.5rem + env(safe-area-inset-bottom, 0px));
   }
 
   .brand-mark {

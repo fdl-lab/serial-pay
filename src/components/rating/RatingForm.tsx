@@ -9,7 +9,7 @@ type Props = {
 };
 
 export function RatingForm({ transactionId, onDone }: Props) {
-  const [score, setScore] = useState(5);
+  const [score, setScore] = useState<number | null>(null);
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
@@ -17,6 +17,11 @@ export function RatingForm({ transactionId, onDone }: Props) {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (busy) return;
+    if (score == null) {
+      setError("★をタップして点数を選んでね");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -32,6 +37,7 @@ export function RatingForm({ transactionId, onDone }: Props) {
       if (!res.ok) {
         if (json.code === "ALREADY_RATED") {
           setDone(true);
+          onDone?.();
           return;
         }
         throw new Error(json.error ?? "評価に失敗しました");
@@ -56,35 +62,62 @@ export function RatingForm({ transactionId, onDone }: Props) {
 
   return (
     <form
-      className="space-y-3 rounded-2xl border border-ink/10 bg-ink/[0.03] p-4"
+      className="relative z-0 space-y-4 rounded-2xl border border-ink/10 bg-ink/[0.03] p-4"
       onSubmit={submit}
     >
       <div>
         <p className="font-bold">評価して取引を完了する</p>
         <p className="mt-1 text-sm text-ink-soft">
-          評価を送ると取引完了になり、出品者へ売上が反映されるよ
+          下の数字をタップして点数を選んでから、完了ボタンを押してね
         </p>
       </div>
 
-      <div className="flex gap-2">
-        {[1, 2, 3, 4, 5].map((n) => (
-          <button
-            key={n}
-            type="button"
-            className={`h-10 w-10 rounded-full text-sm font-bold ${
-              score >= n
-                ? "bg-coral text-white"
-                : "border border-ink/15 bg-white text-ink-soft"
-            }`}
-            onClick={() => setScore(n)}
-            aria-label={`${n}点`}
-          >
-            {n}
-          </button>
-        ))}
+      <div>
+        <p className="mb-2 text-sm font-semibold">
+          {score == null ? (
+            <span className="text-coral">← ここをタップして選ぶ</span>
+          ) : (
+            <>
+              選択中{" "}
+              <span className="font-mono text-base font-extrabold text-coral">
+                ★{score}
+              </span>
+            </>
+          )}
+        </p>
+        <div
+          className="grid grid-cols-5 gap-2"
+          role="radiogroup"
+          aria-label="評価スコア"
+        >
+          {[1, 2, 3, 4, 5].map((n) => {
+            const selected = score === n;
+            return (
+              <button
+                key={n}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                aria-label={`${n}点`}
+                style={{ touchAction: "manipulation" }}
+                className={`flex h-14 w-full items-center justify-center rounded-2xl text-lg font-extrabold transition active:scale-95 ${
+                  selected
+                    ? "bg-coral text-white shadow-md shadow-coral/30 ring-2 ring-coral ring-offset-2"
+                    : "border-2 border-dashed border-ink/25 bg-white text-ink-soft"
+                }`}
+                onClick={() => {
+                  setScore(n);
+                  setError(null);
+                }}
+              >
+                {n}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      <label className="field">
+      <label className="field !mb-0">
         <span>コメント（任意）</span>
         <textarea
           rows={3}
@@ -95,10 +128,19 @@ export function RatingForm({ transactionId, onDone }: Props) {
         />
       </label>
 
-      {error && <p className="banner-error">{error}</p>}
+      {error && <p className="banner-error !mb-0">{error}</p>}
 
-      <button className="btn btn-primary" type="submit" disabled={busy}>
-        {busy ? "送信中…" : "評価して取引完了"}
+      <button
+        className="btn btn-primary btn-block min-h-12 text-base"
+        type="submit"
+        disabled={busy || score == null}
+        style={{ touchAction: "manipulation" }}
+      >
+        {busy
+          ? "送信中…"
+          : score == null
+            ? "先に点数を選んでね"
+            : `★${score} で評価して取引完了`}
       </button>
     </form>
   );

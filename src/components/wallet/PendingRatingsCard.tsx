@@ -74,14 +74,18 @@ export function PendingRatingsCard() {
                   {p.seller.publicId ? ` · ${p.seller.publicId}` : ""}
                 </p>
               </div>
-              {activeId !== p.transactionId && (
+              {activeId !== p.transactionId ? (
                 <button
                   type="button"
-                  className="btn btn-primary shrink-0 !px-3 !py-2 text-xs"
+                  className="btn btn-primary shrink-0 min-h-11 !px-4 text-sm"
                   onClick={() => setActiveId(p.transactionId)}
                 >
                   評価する
                 </button>
+              ) : (
+                <span className="shrink-0 rounded-full bg-mint/15 px-3 py-1.5 text-xs font-bold text-mint-deep">
+                  入力中
+                </span>
               )}
             </div>
             {activeId === p.transactionId && (
