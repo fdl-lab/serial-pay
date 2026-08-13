@@ -419,6 +419,56 @@ export async function cancelPendingPayment(paymentIntentId: string) {
   return { cancelled: true, transactionId: tx.id };
 }
 
+/**
+ * 開示前の状態確認（副作用なし・タイマー開始しない・コードは返さない）
+ */
+export async function getRevealGateForBuyer(
+  buyerId: string,
+  transactionId: string,
+) {
+  const tx = await prisma.transaction.findUnique({
+    where: { id: transactionId },
+    include: {
+      item: {
+        select: {
+          title: true,
+          eventName: true,
+          confirmationWindowMinutes: true,
+        },
+      },
+    },
+  });
+
+  if (!tx || tx.buyerId !== buyerId) {
+    throw new ApiError(404, "取引が見つかりません", "TX_NOT_FOUND");
+  }
+
+  const revealable = [
+    "PAID_ESCROW",
+    "CONFIRMATION_WINDOW",
+    "COMPLETED",
+    "DISPUTED",
+  ];
+  if (!revealable.includes(tx.status)) {
+    throw new ApiError(403, "まだコードを開示できません", "NOT_REVEALED");
+  }
+
+  const awaitingReveal = tx.status === "PAID_ESCROW" || !tx.codeRevealedAt;
+
+  return {
+    transactionId: tx.id,
+    itemTitle: tx.item.title,
+    eventName: tx.item.eventName,
+    status: tx.status,
+    awaitingReveal,
+    codeRevealedAt: tx.codeRevealedAt,
+    confirmationDeadlineAt: tx.confirmationDeadlineAt,
+    confirmationWindowMinutes:
+      tx.item.confirmationWindowMinutes || confirmationWindowMinutes(),
+    buyerConfirmedAt: tx.buyerConfirmedAt,
+  };
+}
+
 export async function revealCodesForBuyer(buyerId: string, transactionId: string) {
   const tx = await prisma.transaction.findUnique({
     where: { id: transactionId },

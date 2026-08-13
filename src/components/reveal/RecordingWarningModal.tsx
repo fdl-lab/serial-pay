@@ -28,6 +28,10 @@ export function RecordingWarningModal({
         <h2 id="rec-title" className="mt-1 text-xl font-bold tracking-tight">
           コード表示前に画面録画を開始して
         </h2>
+        <p className="mt-3 rounded-xl bg-mint/15 px-3 py-2 text-sm font-semibold leading-relaxed text-mint-deep">
+          確認タイマー（{windowMinutes}分）は、下の「コードを表示する」を押した瞬間から始まるよ。
+          この注釈を読んでるあいだはまだ始まらないから安心してね。
+        </p>
         <p className="mt-3 text-sm leading-relaxed text-ink-soft">
           「使えなかった」として異議申し立てする場合、
           <strong className="text-ink">コード表示前〜公式サイトでの入力・エラー画面まで</strong>
@@ -35,7 +39,10 @@ export function RecordingWarningModal({
         </p>
         <ul className="mt-3 list-disc space-y-1 pl-5 text-sm leading-relaxed">
           <li>端末の画面録画を ON にしてから「コードを表示」を押す</li>
-          <li>開示後 {windowMinutes} 分以内に受取確認＋評価（評価で取引完了）or 異議申し立て</li>
+          <li>
+            コード表示後 {windowMinutes} 分以内に受取確認＋評価（評価で取引完了）or
+            異議申し立て
+          </li>
           <li>期限内に評価しないと自動で取引完了・ウォレットへ売上確定</li>
           <li>異議時は必要箇所を3分以内に切り取り添付（編集・AI加工不可）</li>
           <li>まだ準備できてなければ「保留」して、マイページからいつでも開示できる</li>

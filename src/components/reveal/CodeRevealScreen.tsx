@@ -31,7 +31,8 @@ export function CodeRevealScreen({
   windowMinutes = 30,
 }: Props) {
   const router = useRouter();
-  const [accepted, setAccepted] = useState(false);
+  /** null = ゲート確認中 / true = コード取得OK / false = 注釈待ち（未開示） */
+  const [accepted, setAccepted] = useState<boolean | null>(null);
   const [deferred, setDeferred] = useState(false);
   const [data, setData] = useState<RevealPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +40,42 @@ export function CodeRevealScreen({
   const [busy, setBusy] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [completed, setCompleted] = useState(false);
+  const [gateMinutes, setGateMinutes] = useState(windowMinutes);
 
+  // 先に状態だけ見る（ここではタイマーを開始しない）
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiFetch(
+          `/api/transactions/${transactionId}/reveal-gate`,
+        );
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? "取得に失敗しました");
+        if (cancelled) return;
+        if (typeof json.confirmationWindowMinutes === "number") {
+          setGateMinutes(json.confirmationWindowMinutes);
+        }
+        if (json.awaitingReveal) {
+          // 未開示 → 注釈。タイマーはまだ開始しない
+          setAccepted(false);
+        } else {
+          // すでに開示済み → 注釈スキップしてコード取得
+          setAccepted(true);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : "エラーが発生しました");
+          setAccepted(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [transactionId]);
+
+  // 同意後（または再訪で開示済み）だけコード取得。初回のみここでタイマー開始
   useEffect(() => {
     if (!accepted) return;
     let cancelled = false;
@@ -83,7 +119,10 @@ export function CodeRevealScreen({
       setConfirmed(true);
       setData((prev) =>
         prev
-          ? { ...prev, buyerConfirmedAt: prev.buyerConfirmedAt ?? new Date().toISOString() }
+          ? {
+              ...prev,
+              buyerConfirmedAt: prev.buyerConfirmedAt ?? new Date().toISOString(),
+            }
           : prev,
       );
     } catch (e) {
@@ -104,11 +143,13 @@ export function CodeRevealScreen({
     data.status !== "COMPLETED" &&
     data.status !== "DISPUTED";
 
+  const showModal = accepted === false && !deferred;
+
   return (
     <section className="card-surface">
       <RecordingWarningModal
-        open={!accepted && !deferred}
-        windowMinutes={windowMinutes}
+        open={showModal}
+        windowMinutes={gateMinutes}
         onAccept={() => setAccepted(true)}
         onDefer={deferReveal}
       />
@@ -122,7 +163,7 @@ export function CodeRevealScreen({
             {data.eventName ? ` · ${data.eventName}` : ""}
           </p>
         )}
-        {!accepted && !data && (
+        {accepted !== true && !data && (
           <p className="mt-1 text-ink-soft">
             準備ができたら画録を開始してコードを表示してね。保留もできるよ。
           </p>
@@ -136,6 +177,9 @@ export function CodeRevealScreen({
               評価完了まで
             </p>
             <CountdownTimer deadlineIso={data?.confirmationDeadlineAt ?? null} />
+            <p className="mt-1 text-[11px] font-semibold text-ink-soft">
+              コードを表示したときから計測
+            </p>
           </div>
           <p className="text-sm text-ink-soft">
             受取確認のあと、出品者を評価すると取引完了・売上反映になるよ。期限を過ぎると評価なしでも自動完了するよ。
@@ -144,6 +188,9 @@ export function CodeRevealScreen({
       )}
 
       {error && <p className="banner-error">{error}</p>}
+      {accepted === null && !error && (
+        <p className="text-ink-soft">準備中…</p>
+      )}
       {accepted && !data && !error && (
         <p className="text-ink-soft">コードを復号中…</p>
       )}
@@ -216,10 +263,12 @@ export function CodeRevealScreen({
       )}
 
       {completed && (
-        <p className="banner-ok mt-5">取引完了！評価ありがとう。出品者へ売上が反映されたよ。</p>
+        <p className="banner-ok mt-5">
+          取引完了！評価ありがとう。出品者へ売上が反映されたよ。
+        </p>
       )}
 
-      {!accepted && (
+      {accepted === false && (
         <p className="text-center text-sm text-ink-soft">
           あとで見る場合は{" "}
           <Link href="/me" className="font-semibold text-mint-deep underline">
