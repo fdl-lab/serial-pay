@@ -246,24 +246,66 @@ function AccountDeleteSection() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [blockers, setBlockers] = useState<string[]>([]);
+  const [openTxs, setOpenTxs] = useState<
+    {
+      id: string;
+      statusLabel: string;
+      role: string;
+      itemTitle: string;
+      cancellable: boolean;
+    }[]
+  >([]);
   const [canDelete, setCanDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function loadStatus() {
+    setLoading(true);
     setError(null);
-    const res = await apiFetch("/api/auth/account");
-    const json = await res.json();
-    if (!res.ok) {
-      setError(json.error ?? "確認に失敗しました");
-      return;
+    try {
+      const res = await apiFetch("/api/auth/account");
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json.error ?? "確認に失敗しました");
+        setOpen(true);
+        return;
+      }
+      setCanDelete(Boolean(json.canDelete));
+      setBlockers(json.blockers ?? []);
+      setOpenTxs(json.openTransactions ?? []);
+      setOpen(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "エラー");
+      setOpen(true);
+    } finally {
+      setLoading(false);
     }
-    setCanDelete(Boolean(json.canDelete));
-    setBlockers(json.blockers ?? []);
-    setOpen(true);
+  }
+
+  async function cancelPending(transactionId: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await apiFetch("/api/auth/account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "cancel_pending", transactionId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "キャンセルに失敗");
+      setCanDelete(Boolean(json.canDelete));
+      setBlockers(json.blockers ?? []);
+      setOpenTxs(json.openTransactions ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "エラー");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function confirmDelete() {
+    if (!canDelete) return;
     setBusy(true);
     setError(null);
     try {
@@ -282,28 +324,77 @@ function AccountDeleteSection() {
     <div className="border-t border-ink/10 pt-4">
       <button
         type="button"
-        className="text-sm font-semibold text-coral underline"
+        className="min-h-11 w-full rounded-xl border border-coral/40 bg-coral/5 px-3 py-2 text-left text-sm font-bold text-coral"
+        disabled={loading}
         onClick={() => void loadStatus()}
       >
-        退会する
+        {loading ? "確認中…" : "退会する"}
       </button>
       {open && (
-        <div className="mt-3 space-y-2 rounded-xl border border-coral/30 bg-coral/5 p-3 text-sm">
+        <div className="mt-3 space-y-3 rounded-xl border border-coral/30 bg-coral/5 p-3 text-sm">
           <p className="font-bold text-coral">退会の確認</p>
           <p className="text-ink-soft">
-            未完了の取引（支払待ち・開示前・確認中・異議中）がある場合は退会できないよ。
-            退会後は同じアカウントは復活せず、同じLINEでは30日間再登録できないよ。期限後は新規アカウント（公開IDも新規・eKYCやり直し）になるよ。
+            未完了の取引がある場合は退会できないよ。退会後は同じアカウントは復活せず、同じLINEでは30日間再登録できないよ。
           </p>
-          {blockers.length > 0 ? (
+
+          {openTxs.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-bold text-ink-soft">未完了の取引</p>
+              <ul className="space-y-2">
+                {openTxs.map((tx) => (
+                  <li
+                    key={tx.id}
+                    className="rounded-lg border border-ink/10 bg-white px-3 py-2"
+                  >
+                    <p className="font-semibold">{tx.itemTitle}</p>
+                    <p className="text-xs text-ink-soft">
+                      {tx.statusLabel}
+                      {tx.role === "seller" ? "（出品）" : "（購入）"}
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Link
+                        href={`/transactions/${tx.id}`}
+                        className="text-xs font-semibold text-mint-deep underline"
+                      >
+                        取引を開く
+                      </Link>
+                      {tx.cancellable && (
+                        <button
+                          type="button"
+                          className="text-xs font-semibold text-coral underline"
+                          disabled={busy}
+                          onClick={() => void cancelPending(tx.id)}
+                        >
+                          支払い待ちをキャンセル
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {blockers.length > 0 && openTxs.length === 0 && (
             <ul className="list-disc space-y-1 pl-5 text-ink-soft">
               {blockers.map((b) => (
                 <li key={b}>{b}</li>
               ))}
             </ul>
-          ) : (
-            <p className="text-ink-soft">いま退会できる状態だよ。本当に退会する？</p>
           )}
+
+          {canDelete ? (
+            <p className="font-semibold text-ink">
+              いま退会できる状態だよ。本当に退会する？
+            </p>
+          ) : (
+            <p className="font-semibold text-coral">
+              上の未完了取引を片付けると「退会を確定する」が押せるよ
+            </p>
+          )}
+
           {error && <p className="banner-error">{error}</p>}
+
           <div className="flex gap-2">
             <button
               type="button"
@@ -314,11 +405,11 @@ function AccountDeleteSection() {
             </button>
             <button
               type="button"
-              className="btn btn-primary !px-3 !py-2 text-xs"
+              className="btn btn-primary !px-3 !py-2 text-xs disabled:opacity-40"
               disabled={!canDelete || busy}
               onClick={() => void confirmDelete()}
             >
-              {busy ? "退会処理中…" : "退会する"}
+              {busy ? "処理中…" : canDelete ? "退会を確定する" : "まだ退会できない"}
             </button>
           </div>
         </div>

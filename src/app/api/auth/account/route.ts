@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { jsonOk, jsonError, requireUser } from "@/lib/api";
+import { jsonOk, jsonError, requireUser, ApiError } from "@/lib/api";
 import {
+  cancelOwnPendingPayment,
   deleteAccount,
   getAccountDeletionBlockers,
 } from "@/services/account";
@@ -16,11 +17,29 @@ export async function GET(req: Request) {
   }
 }
 
+export async function POST(req: Request) {
+  try {
+    const user = await requireUser(req);
+    const body = (await req.json().catch(() => ({}))) as {
+      action?: string;
+      transactionId?: string;
+    };
+    if (body.action === "cancel_pending" && body.transactionId) {
+      const result = await cancelOwnPendingPayment(user.id, body.transactionId);
+      const status = await getAccountDeletionBlockers(user.id);
+      return jsonOk({ ...result, ...status });
+    }
+    throw new ApiError(400, "不正なリクエストだよ", "BAD_REQUEST");
+  } catch (e) {
+    return jsonError(e);
+  }
+}
+
 export async function DELETE(req: Request) {
   try {
     const user = await requireUser(req);
-    await deleteAccount(user.id);
-    const res = NextResponse.json({ deleted: true });
+    const result = await deleteAccount(user.id);
+    const res = NextResponse.json(result);
     const clear = clearSessionCookieOptions();
     res.cookies.set(clear);
     return res;
