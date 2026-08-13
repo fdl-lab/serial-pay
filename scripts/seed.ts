@@ -197,6 +197,92 @@ async function main() {
     console.log("デモ出品は既にあるのでスキップ");
   }
 
+  // 0円お試し出品（購入フロー体験用）— 常に1件・在庫ありを確保
+  const TRIAL_TITLE = "[お試し] 購入フロー体験シリアル";
+  let trialItem = await prisma.item.findFirst({
+    where: { sellerId: seller.id, title: TRIAL_TITLE },
+  });
+
+  if (!trialItem) {
+    trialItem = await prisma.item.create({
+      data: {
+        sellerId: seller.id,
+        title: TRIAL_TITLE,
+        artistName: "シリアルPay",
+        eventName: "はじめての購入体験",
+        category: "お試し",
+        description:
+          "こんな感じで買えるよ、試してみてね！\nカード不要・0円で、支払→シリアル開示までの流れを体験できるよ。",
+        listingType: "INVENTORY",
+        status: "ACTIVE",
+        unitPriceYen: 0,
+        stockTotal: 5,
+        stockAvailable: 5,
+        bulkDiscountEnabled: false,
+        suggestedAvgPriceYen: null,
+        publishedAt: new Date(),
+      },
+    });
+    await prisma.serialCode.createMany({
+      data: Array.from({ length: 5 }, (_, i) => {
+        const code = `TRIAL-SEED-${String(i + 1).padStart(3, "0")}`;
+        return {
+          itemId: trialItem!.id,
+          ciphertext: encryptSerial(code),
+          codeHash: hashSerial(code),
+          payloadKind: "TEXT" as const,
+          status: "AVAILABLE" as const,
+        };
+      }),
+    });
+    console.log("0円お試し出品をつくったよ");
+  } else {
+    const available = await prisma.serialCode.count({
+      where: { itemId: trialItem.id, status: "AVAILABLE" },
+    });
+    if (available < 3) {
+      const need = 5 - available;
+      await prisma.serialCode.createMany({
+        data: Array.from({ length: need }, (_, i) => {
+          const code = `TRIAL-SEED-${Date.now().toString(36).toUpperCase()}-${i}`;
+          return {
+            itemId: trialItem!.id,
+            ciphertext: encryptSerial(code),
+            codeHash: hashSerial(code),
+            payloadKind: "TEXT" as const,
+            status: "AVAILABLE" as const,
+          };
+        }),
+      });
+      await prisma.item.update({
+        where: { id: trialItem.id },
+        data: {
+          unitPriceYen: 0,
+          status: "ACTIVE",
+          soldOutAt: null,
+          stockTotal: { increment: need },
+          stockAvailable: { increment: need },
+          description:
+            "こんな感じで買えるよ、試してみてね！\nカード不要・0円で、支払→シリアル開示までの流れを体験できるよ。",
+          publishedAt: trialItem.publishedAt ?? new Date(),
+        },
+      });
+      console.log(`お試し在庫を ${need} 枚補充したよ`);
+    } else {
+      await prisma.item.update({
+        where: { id: trialItem.id },
+        data: {
+          unitPriceYen: 0,
+          status: "ACTIVE",
+          soldOutAt: null,
+          description:
+            "こんな感じで買えるよ、試してみてね！\nカード不要・0円で、支払→シリアル開示までの流れを体験できるよ。",
+        },
+      });
+      console.log("0円お試し出品は既にあるよ（在庫OK）");
+    }
+  }
+
   console.log("Seed OK");
   console.log("DEV_USER_ID (buyer) =", buyer.id);
   console.log("SELLER_USER_ID      =", seller.id);

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { encryptSerial, hashSerial } from "@/lib/crypto/serial";
 import { ApiError, assertSellerEligible } from "@/lib/api";
+import { isTrialListing } from "@/lib/trial-listing";
 import type { User } from "@prisma/client";
 
 const listingSchema = z
@@ -185,7 +186,7 @@ export async function listPublicItems(params?: { take?: number; q?: string }) {
   });
 
   // Prisma Decimal などをプレーンな値に直し、RSC / JSON のシリアライズ事故を防ぐ
-  return rows.map((item) => ({
+  const mapped = rows.map((item) => ({
     id: item.id,
     title: item.title,
     artistName: item.artistName,
@@ -209,6 +210,18 @@ export async function listPublicItems(params?: { take?: number; q?: string }) {
       ratingCount: item.seller.ratingCount,
     },
   }));
+
+  // 0円お試しを一覧の先頭に
+  mapped.sort((a, b) => {
+    const at = isTrialListing(a) ? 0 : 1;
+    const bt = isTrialListing(b) ? 0 : 1;
+    if (at !== bt) return at - bt;
+    const ap = a.publishedAt?.getTime() ?? 0;
+    const bp = b.publishedAt?.getTime() ?? 0;
+    return bp - ap;
+  });
+
+  return mapped;
 }
 
 export async function getPublicItem(id: string) {

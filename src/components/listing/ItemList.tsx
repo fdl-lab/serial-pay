@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { formatYen } from "@/lib/format";
+import { isTrialListing } from "@/lib/trial-listing";
 
 export type ListingListItem = {
   id: string;
@@ -63,8 +64,10 @@ export function ItemList({
       {items.map((item) => {
         const sellerName = item.seller.displayName?.trim() || "出品者";
         const rating = item.seller.ratingCount > 0 ? ratingText(item.seller.ratingScore) : null;
-        const typeLabel =
-          item.listingType === "SET"
+        const trial = isTrialListing(item);
+        const typeLabel = trial
+          ? "無料で試せるよ"
+          : item.listingType === "SET"
             ? `セット ${item.setQuantity ?? item.stockAvailable}枚`
             : `在庫 ${item.stockAvailable}枚 · バラ可`;
 
@@ -129,10 +132,23 @@ export function ItemList({
               </div>
 
               <div className="flex shrink-0 flex-col items-end justify-center self-center pl-1">
-                <p className="font-mono text-[15px] font-semibold tracking-tight sm:text-base">
-                  {formatYen(item.unitPriceYen)}
-                </p>
-                <p className="text-[11px] font-semibold text-ink-soft">/ 枚</p>
+                {trial ? (
+                  <>
+                    <p className="rounded-md bg-mint/20 px-1.5 py-0.5 text-[11px] font-extrabold text-mint-deep">
+                      お試し
+                    </p>
+                    <p className="mt-1 font-mono text-[15px] font-semibold tracking-tight sm:text-base">
+                      ¥0
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-mono text-[15px] font-semibold tracking-tight sm:text-base">
+                      {formatYen(item.unitPriceYen)}
+                    </p>
+                    <p className="text-[11px] font-semibold text-ink-soft">/ 枚</p>
+                  </>
+                )}
               </div>
             </Link>
           </li>

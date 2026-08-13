@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { getStripe, confirmationWindowMinutes } from "@/lib/stripe";
 import { calcPriceBreakdown } from "@/lib/money";
 import { ApiError, assertBuyerEligible } from "@/lib/api";
-import { decryptSerial } from "@/lib/crypto/serial";
+import { decryptSerial, encryptSerial, hashSerial } from "@/lib/crypto/serial";
 import {
   debitWalletForPurchase,
   creditWalletRefund,
@@ -10,6 +10,7 @@ import {
 } from "@/services/wallet";
 import type { PaymentMethod, User } from "@prisma/client";
 import { z } from "zod";
+import { isTrialListing } from "@/lib/trial-listing";
 
 const checkoutSchema = z.object({
   itemId: z.string().min(1),
@@ -35,17 +36,25 @@ export async function createCheckout(buyer: User, raw: unknown) {
   if (item.sellerId === buyer.id) {
     throw new ApiError(400, "自分の出品は購入できません", "SELF_PURCHASE");
   }
+
+  const trial = isTrialListing(item);
+
   if (
-    item.seller.stripeConnectStatus !== "ACTIVE" ||
-    !item.seller.stripeConnectAccountId
+    !trial &&
+    (item.seller.stripeConnectStatus !== "ACTIVE" ||
+      !item.seller.stripeConnectAccountId)
   ) {
     throw new ApiError(400, "出品者の受取設定が未完了です", "SELLER_CONNECT");
   }
 
-  const quantity =
-    item.listingType === "SET" ? (item.setQuantity ?? item.stockTotal) : (qtyInput ?? 1);
+  // お試しは1枚固定（体験用）
+  const quantity = trial
+    ? 1
+    : item.listingType === "SET"
+      ? (item.setQuantity ?? item.stockTotal)
+      : (qtyInput ?? 1);
 
-  if (item.listingType === "SET" && qtyInput && qtyInput !== quantity) {
+  if (!trial && item.listingType === "SET" && qtyInput && qtyInput !== quantity) {
     throw new ApiError(400, "セット販売は分割購入できません", "SET_ONLY");
   }
   if (item.stockAvailable < quantity) {
@@ -55,27 +64,31 @@ export async function createCheckout(buyer: User, raw: unknown) {
   const price = calcPriceBreakdown({
     unitPriceYen: item.unitPriceYen,
     quantity,
-    bulkDiscountEnabled: item.bulkDiscountEnabled,
+    bulkDiscountEnabled: trial ? false : item.bulkDiscountEnabled,
     bulkDiscountMinQty: item.bulkDiscountMinQty,
     bulkDiscountPercent: item.bulkDiscountPercent,
   });
 
-  if (price.amountChargedYen < 1) {
+  // 0円お試しは許可。通常出品は最低100円なのでここには来ない想定
+  if (price.amountChargedYen < 0 || (!trial && price.amountChargedYen < 1)) {
     throw new ApiError(400, "決済金額が小さすぎます", "AMOUNT_TOO_SMALL");
   }
 
   const wallet = await ensureWallet(buyer.id);
-  const requestedWallet = Math.max(0, useWalletRaw ?? 0);
-  const walletPaidYen = Math.min(
-    requestedWallet,
-    wallet.balanceYen,
-    price.amountChargedYen,
-  );
-  const stripePaidYen = price.amountChargedYen - walletPaidYen;
+  const requestedWallet = trial ? 0 : Math.max(0, useWalletRaw ?? 0);
+  const walletPaidYen = trial
+    ? 0
+    : Math.min(requestedWallet, wallet.balanceYen, price.amountChargedYen);
+  const stripePaidYen = trial ? 0 : price.amountChargedYen - walletPaidYen;
 
   let paymentMethod: PaymentMethod = "STRIPE";
-  if (walletPaidYen > 0 && stripePaidYen === 0) paymentMethod = "WALLET";
-  else if (walletPaidYen > 0 && stripePaidYen > 0) paymentMethod = "MIXED";
+  if (trial || price.amountChargedYen === 0) {
+    paymentMethod = "WALLET"; // 0円は即履行（カード不要）
+  } else if (walletPaidYen > 0 && stripePaidYen === 0) {
+    paymentMethod = "WALLET";
+  } else if (walletPaidYen > 0 && stripePaidYen > 0) {
+    paymentMethod = "MIXED";
+  }
 
   if (stripePaidYen > 0 && stripePaidYen < 50) {
     throw new ApiError(
@@ -150,15 +163,42 @@ export async function createCheckout(buyer: User, raw: unknown) {
       });
     }
 
+    // お試し在庫を補充（常に体験できるように）
+    if (trial) {
+      const code = `TRIAL-${Date.now().toString(36).toUpperCase()}-${Math.random()
+        .toString(36)
+        .slice(2, 6)
+        .toUpperCase()}`;
+      await tx.serialCode.create({
+        data: {
+          itemId: item.id,
+          ciphertext: encryptSerial(code),
+          codeHash: hashSerial(code),
+          payloadKind: "TEXT",
+          status: "AVAILABLE",
+        },
+      });
+      await tx.item.update({
+        where: { id: item.id },
+        data: {
+          stockTotal: { increment: 1 },
+          stockAvailable: { increment: 1 },
+          status: "ACTIVE",
+          soldOutAt: null,
+        },
+      });
+    }
+
     return txRow;
   });
 
-  // ウォレット全額払い → 即履行
-  if (paymentMethod === "WALLET") {
+  // 0円お試し / ウォレット全額払い → 即履行
+  if (paymentMethod === "WALLET" && stripePaidYen === 0) {
     await fulfillTransactionById(result.id, { stripePaymentIntentId: null });
     return {
       transactionId: result.id,
       paidWithWallet: true as const,
+      freeTrial: trial,
       amountChargedYen: price.amountChargedYen,
       walletPaidYen,
       stripePaidYen: 0,

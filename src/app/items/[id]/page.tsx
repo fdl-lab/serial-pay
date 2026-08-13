@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getPublicItem } from "@/services/listing";
 import { listSellerRatings } from "@/services/rating";
 import { formatYen } from "@/lib/format";
+import { isTrialListing } from "@/lib/trial-listing";
 import { BuyPanel } from "@/components/listing/BuyPanel";
 
 type Props = { params: Promise<{ id: string }> };
@@ -21,6 +22,7 @@ export default async function ItemDetailPage({ params }: Props) {
       : null;
   const initial = sellerName.slice(0, 1);
   const recentRatings = await listSellerRatings(item.seller.id, 5);
+  const trial = isTrialListing(item);
 
   return (
     <main className="space-y-4 pb-28 sm:pb-4">
@@ -31,6 +33,11 @@ export default async function ItemDetailPage({ params }: Props) {
       <article className="card-surface space-y-4 !p-4 sm:!p-6">
         <div>
           <p className="brand-mark">シリアルPay</p>
+          {trial && (
+            <p className="mb-2 inline-block rounded-md bg-mint/20 px-2 py-0.5 text-xs font-extrabold text-mint-deep">
+              0円お試し
+            </p>
+          )}
           {item.artistName && (
             <p className="mb-1 text-sm font-extrabold tracking-wide text-mint-deep">
               {item.artistName}
@@ -94,12 +101,18 @@ export default async function ItemDetailPage({ params }: Props) {
               1枚あたり
             </p>
             <p className="font-mono text-3xl font-semibold">
-              {formatYen(item.unitPriceYen)}
+              {trial ? "¥0" : formatYen(item.unitPriceYen)}
             </p>
-            {item.suggestedAvgPriceYen != null && (
-              <p className="mt-1 text-xs text-ink-soft">
-                相場めやす {formatYen(item.suggestedAvgPriceYen)}
+            {trial ? (
+              <p className="mt-1 text-xs font-semibold text-mint-deep">
+                カード不要 · 購入の流れを体験できるよ
               </p>
+            ) : (
+              item.suggestedAvgPriceYen != null && (
+                <p className="mt-1 text-xs text-ink-soft">
+                  相場めやす {formatYen(item.suggestedAvgPriceYen)}
+                </p>
+              )
             )}
           </div>
         </div>
@@ -144,6 +157,7 @@ export default async function ItemDetailPage({ params }: Props) {
 
         <BuyPanel
           itemId={item.id}
+          title={item.title}
           listingType={item.listingType}
           unitPriceYen={item.unitPriceYen}
           stockAvailable={item.stockAvailable}

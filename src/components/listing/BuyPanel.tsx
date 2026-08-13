@@ -5,9 +5,11 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { formatYen } from "@/lib/format";
 import { apiFetch } from "@/lib/auth/fetch";
+import { isTrialListing } from "@/lib/trial-listing";
 
 type Props = {
   itemId: string;
+  title: string;
   listingType: "SET" | "INVENTORY";
   unitPriceYen: number;
   stockAvailable: number;
@@ -18,6 +20,7 @@ type Props = {
 
 export function BuyPanel({
   itemId,
+  title,
   listingType,
   unitPriceYen,
   stockAvailable,
@@ -25,13 +28,18 @@ export function BuyPanel({
   status,
 }: Props) {
   const router = useRouter();
+  const trial = isTrialListing({ title, unitPriceYen });
   const maxQty = listingType === "SET" ? (setQuantity ?? stockAvailable) : stockAvailable;
   const [qty, setQty] = useState(listingType === "SET" ? maxQty : 1);
-  const [useWallet, setUseWallet] = useState(true);
+  const [useWallet, setUseWallet] = useState(!trial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const subtotal = useMemo(() => unitPriceYen * qty, [unitPriceYen, qty]);
+  const buyQty = trial ? 1 : qty;
+  const subtotal = useMemo(
+    () => unitPriceYen * buyQty,
+    [unitPriceYen, buyQty],
+  );
   const soldOut = status !== "ACTIVE" || stockAvailable <= 0;
 
   async function buy() {
@@ -43,8 +51,8 @@ export function BuyPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           itemId,
-          quantity: listingType === "SET" ? undefined : qty,
-          useWalletYen: useWallet ? subtotal : 0,
+          quantity: trial || listingType === "SET" ? undefined : qty,
+          useWalletYen: trial ? 0 : useWallet ? subtotal : 0,
         }),
       });
       const json = await res.json();
@@ -76,7 +84,13 @@ export function BuyPanel({
 
   return (
     <div className="space-y-3 border-t border-ink/10 pt-4">
-      {listingType === "INVENTORY" && !soldOut && (
+      {trial && (
+        <p className="rounded-xl bg-mint/15 px-3 py-2.5 text-sm font-semibold leading-relaxed text-mint-deep">
+          こんな感じで買えるよ、試してみてね！カード不要の0円お試しだよ ✌️
+        </p>
+      )}
+
+      {listingType === "INVENTORY" && !soldOut && !trial && (
         <label className="field !mb-0">
           <span>購入枚数</span>
           <input
@@ -95,18 +109,22 @@ export function BuyPanel({
 
       <div className="flex items-center justify-between text-sm">
         <span className="font-semibold text-ink-soft">合計</span>
-        <span className="font-mono text-lg font-semibold">{formatYen(subtotal)}</span>
+        <span className="font-mono text-lg font-semibold">
+          {trial ? "¥0（無料）" : formatYen(subtotal)}
+        </span>
       </div>
 
-      <label className="flex min-h-11 items-center gap-2 text-sm font-semibold">
-        <input
-          type="checkbox"
-          className="h-4 w-4"
-          checked={useWallet}
-          onChange={(e) => setUseWallet(e.target.checked)}
-        />
-        売上金残高で支払う（足りれば即開示 / 足りなければカード併用）
-      </label>
+      {!trial && (
+        <label className="flex min-h-11 items-center gap-2 text-sm font-semibold">
+          <input
+            type="checkbox"
+            className="h-4 w-4"
+            checked={useWallet}
+            onChange={(e) => setUseWallet(e.target.checked)}
+          />
+          売上金残高で支払う（足りれば即開示 / 足りなければカード併用）
+        </label>
+      )}
 
       {error && (
         <div className="space-y-2">
@@ -128,7 +146,13 @@ export function BuyPanel({
         disabled={busy || soldOut}
         onClick={buy}
       >
-        {soldOut ? "売り切れ" : busy ? "処理中…" : "購入する"}
+        {soldOut
+          ? "売り切れ"
+          : busy
+            ? "処理中…"
+            : trial
+              ? "無料で試す"
+              : "購入する"}
       </button>
     </div>
   );
