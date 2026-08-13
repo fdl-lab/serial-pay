@@ -98,6 +98,22 @@ function MyPageInner() {
 
       <ProfileCard />
 
+      {data ? (
+        <WalletBalanceCard
+          balanceYen={data.balanceYen}
+          pendingYen={data.pendingYen}
+          payoutFeeYen={data.payoutFeeYen}
+          connectStatus={data.connectStatus}
+          onRequestPayout={() => setPayoutOpen(true)}
+        />
+      ) : (
+        !error && (
+          <section className="card-surface">
+            <p className="text-sm text-ink-soft">売上ウォレットを読み込み中…</p>
+          </section>
+        )
+      )}
+
       <MessagesCard />
 
       <PendingRatingsCard />
@@ -106,14 +122,6 @@ function MyPageInner() {
 
       {data && (
         <>
-          <WalletBalanceCard
-            balanceYen={data.balanceYen}
-            pendingYen={data.pendingYen}
-            payoutFeeYen={data.payoutFeeYen}
-            connectStatus={data.connectStatus}
-            onRequestPayout={() => setPayoutOpen(true)}
-          />
-
           <section className="card-surface">
             <h2 className="text-lg font-bold">最近の残高履歴</h2>
             <ul className="mt-3 divide-y divide-ink/10">
@@ -172,8 +180,6 @@ function MyPageInner() {
           />
         </>
       )}
-
-      {!data && !error && <p className="text-ink-soft">読み込み中…</p>}
     </div>
   );
 }
