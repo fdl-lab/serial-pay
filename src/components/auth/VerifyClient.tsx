@@ -47,7 +47,7 @@ export function VerifyClient() {
 
   useEffect(() => {
     if (ekycReturn) {
-      setEkycMessage("本人確認を受け付けたよ。結果が反映されるまで少し待ってね。");
+      setEkycMessage("本人確認を受け付けました。結果が反映されるまで、しばらくお待ちください。");
       void load();
     }
   }, [ekycReturn, load]);
@@ -78,7 +78,7 @@ export function VerifyClient() {
       <header>
         <p className="brand-mark">シリアルPay</p>
         <h1 className="text-3xl font-extrabold tracking-tight">本人確認</h1>
-        <p className="mt-1 text-ink-soft">購入・出品には LINEログイン + eKYC が必要だよ</p>
+        <p className="mt-1 text-ink-soft">購入・出品には LINEログイン + eKYC が必要です</p>
       </header>
 
       {error && (
@@ -164,9 +164,9 @@ export function VerifyClient() {
 
           {allDone && (
             <section className="card-surface">
-              <p className="font-bold text-mint-deep">すべて完了！</p>
+              <p className="font-bold text-mint-deep">すべて完了しました</p>
               <p className="mt-1 text-sm text-ink-soft">
-                購入・出品ができるようになったよ。
+                購入・出品ができるようになりました。
               </p>
               <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                 <Link href="/" className="btn btn-primary">

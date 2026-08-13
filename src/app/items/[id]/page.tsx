@@ -79,7 +79,7 @@ export default async function ItemDetailPage({ params }: Props) {
             <p className="text-xs font-semibold text-ink-soft">
               {rating
                 ? `評価 ★${rating}（${item.seller.ratingCount}件）`
-                : "評価まだなし"}
+                : "評価はまだありません"}
               {" · "}
               売上 {item.seller.completedSales}件
               {item.seller.publicId ? ` · ${item.seller.publicId}` : ""}
@@ -105,7 +105,7 @@ export default async function ItemDetailPage({ params }: Props) {
             </p>
             {trial ? (
               <p className="mt-1 text-xs font-semibold text-mint-deep">
-                カード不要 · 購入の流れを体験できるよ
+                カード不要 · 購入の流れを体験できます
               </p>
             ) : (
               item.suggestedAvgPriceYen != null && (

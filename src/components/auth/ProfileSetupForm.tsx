@@ -82,7 +82,7 @@ export function ProfileSetupForm() {
         <p className="brand-mark">シリアルPay</p>
         <h1 className="text-3xl font-extrabold tracking-tight">プロフィール設定</h1>
         <p className="mt-2 text-ink-soft">
-          表示名と画像はあとからマイページでも変えられるよ。公開IDは変更できないから安心だね。
+          表示名と画像はあとからマイページでも変更できます。公開IDは変更できないため安心です。
         </p>
       </header>
 
@@ -130,7 +130,7 @@ export function ProfileSetupForm() {
           {user?.publicId ?? "発行中…"}
         </p>
         <p className="mt-1 text-xs text-ink-soft">
-          名前や画像を変えてもこのIDは変わらないよ。なりすまし対策の目印だよ。
+          名前や画像を変えても、このIDは変わりません。なりすまし対策の目印です。
         </p>
       </div>
 

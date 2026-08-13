@@ -52,7 +52,7 @@ export async function createDispute(buyerId: string, transactionId: string, raw:
     throw new ApiError(404, "取引が見つかりません", "TX_NOT_FOUND");
   }
   if (tx.buyerConfirmedAt) {
-    throw new ApiError(409, "受取確認済みのため異議は出せないよ", "ALREADY_CONFIRMED");
+    throw new ApiError(409, "受取確認済みのため異議は出せません", "ALREADY_CONFIRMED");
   }
 
   const existing = await prisma.dispute.findUnique({
@@ -165,12 +165,12 @@ export async function createDispute(buyerId: string, transactionId: string, raw:
   await createUserMessage({
     userId: buyerId,
     kind: isReapply ? "DISPUTE_REAPPLIED" : "DISPUTE_SUBMITTED",
-    title: isReapply ? "異議を再申請したよ" : "異議申し立てを受け付けたよ",
+    title: isReapply ? "異議を再申請しました" : "異議申し立てを受け付けました",
     body: [
       `「${itemLabel}」の異議を事務局が確認します。`,
-      "審査中は確認タイマーを止めているよ。",
+      "審査中は確認タイマーを停止しています。",
       `許可された場合、事務局確認後およそ1〜2週間（目安${DISPUTE_REFUND_ETA_DAYS}日以内）でウォレット残高へ返金されます。`,
-      "審査にはお時間をいただくことがあるよ。結果はマイページのメッセージでお知らせするね。",
+      "審査にはお時間をいただくことがあります。結果はマイページのメッセージでお知らせします。",
     ].join("\n"),
     linkHref: `/transactions/${transactionId}`,
     linkLabel: "取引を見る",
@@ -256,10 +256,10 @@ export async function resolveDispute(
     await createUserMessage({
       userId: tx.buyerId,
       kind: "DISPUTE_APPROVED",
-      title: "異議が許可されたよ",
+      title: "異議が許可されました",
       body: [
         `「${itemLabel}」の異議申し立てが許可されました。`,
-        `ウォレット残高への返金は${DISPUTE_REFUND_ETA_DAYS}日以内を目安に反映されるよ（事務局確認後およそ1〜2週間）。`,
+        `ウォレット残高への返金は${DISPUTE_REFUND_ETA_DAYS}日以内を目安に反映されます（事務局確認後およそ1〜2週間）。`,
         reviewerNote ? `事務局メモ: ${reviewerNote}` : "",
       ]
         .filter(Boolean)
@@ -313,11 +313,11 @@ export async function resolveDispute(
   await createUserMessage({
     userId: tx.buyerId,
     kind: "DISPUTE_REJECTED",
-    title: "異議が却下されたよ",
+    title: "異議が却下されました",
     body: [
       `「${itemLabel}」の異議申し立ては却下されました。`,
       "必要事項を追記のうえ、再申請してください。",
-      `再申請の期限は ${deadline.toLocaleString("ja-JP")} までだよ。`,
+      `再申請の期限は ${deadline.toLocaleString("ja-JP")} までです。`,
       reviewerNote ? `事務局メモ: ${reviewerNote}` : "",
     ]
       .filter(Boolean)

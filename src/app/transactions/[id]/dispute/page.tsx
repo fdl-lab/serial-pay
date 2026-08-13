@@ -16,14 +16,14 @@ function readVideoDurationSec(file: File): Promise<number> {
       const duration = video.duration;
       URL.revokeObjectURL(url);
       if (!Number.isFinite(duration) || duration <= 0) {
-        reject(new Error("動画の長さを読み取れなかったよ"));
+        reject(new Error("動画の長さを読み取れませんでした"));
         return;
       }
       resolve(duration);
     };
     video.onerror = () => {
       URL.revokeObjectURL(url);
-      reject(new Error("動画を開けなかったよ"));
+      reject(new Error("動画を開けませんでした"));
     };
     video.src = url;
   });
@@ -53,7 +53,7 @@ export default function DisputePage() {
       } catch (e) {
         if (!cancelled) {
           setDurationSec(null);
-          setErr(e instanceof Error ? e.message : "動画の確認に失敗");
+          setErr(e instanceof Error ? e.message : "動画の確認に失敗しました");
         }
       }
     })();
@@ -68,19 +68,19 @@ export default function DisputePage() {
     setErr(null);
     setMsg(null);
     try {
-      if (!file) throw new Error("画面録画を添付してね");
+      if (!file) throw new Error("画面録画を添付してください");
       if (!attest) {
-        throw new Error("切り取りルールへの同意が必要だよ");
+        throw new Error("切り取りルールへの同意が必要です");
       }
       if (file.size > MAX_BYTES) {
-        throw new Error("動画は100MB以内にしてね（必要箇所を3分以内に切り取り）");
+        throw new Error("動画は100MB以内にしてください（必要箇所を3分以内に切り取り）");
       }
       if (durationSec == null) {
-        throw new Error("動画の長さを確認できなかったよ。別のファイルを試してね");
+        throw new Error("動画の長さを確認できませんでした。別のファイルをお試しください");
       }
       if (durationSec > MAX_DURATION_SEC) {
         throw new Error(
-          "必要箇所を3分以内に切り取ってからアップしてね（編集・AI加工は不可）",
+          "必要箇所を3分以内に切り取ってからアップロードしてください（編集・AI加工は不可）",
         );
       }
 
@@ -110,7 +110,7 @@ export default function DisputePage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "申請に失敗しました");
       setMsg(
-        `異議を受け付けたよ（${json.disputeId}）。事務局確認後、許可されれば1〜2週間でウォレットへ返金されるよ。結果はマイページのメッセージで届くね。`,
+        `異議を受け付けました（${json.disputeId}）。事務局確認後、許可されれば1〜2週間でウォレットへ返金されます。結果はマイページのメッセージでお知らせします。`,
       );
       setFile(null);
       setDurationSec(null);
@@ -136,7 +136,7 @@ export default function DisputePage() {
         <p className="brand-mark">シリアルPay</p>
         <h1 className="text-3xl font-extrabold tracking-tight">異議申し立て</h1>
         <p className="mb-3 mt-2 text-ink-soft">
-          コード表示前からエラー画面までの画面録画の添付が必須。未添付は受け付けないよ。
+          コード表示前からエラー画面までの画面録画の添付が必須です。未添付の申請は受け付けられません。
         </p>
 
         <div className="mb-4 rounded-2xl border border-mint/40 bg-mint/10 p-4 text-sm leading-relaxed">
@@ -144,7 +144,7 @@ export default function DisputePage() {
           <p className="mt-2 text-ink-soft">
             事務局確認のうえ許可された場合、
             <strong className="text-ink">確認後およそ1〜2週間</strong>
-            でウォレット残高へ返金されます。審査結果はマイページのメッセージでお知らせするよ。
+            でウォレット残高へ返金されます。審査結果はマイページのメッセージでお知らせします。
           </p>
         </div>
 
@@ -153,7 +153,7 @@ export default function DisputePage() {
           <ul className="mt-2 list-disc space-y-1 pl-5 text-ink-soft">
             <li>
               <strong className="text-ink">必要箇所だけを3分以内</strong>
-              に切り取ってアップしてね
+              に切り取ってアップロードしてください
             </li>
             <li>
               <strong className="text-ink">編集動画・AI加工は不可</strong>
@@ -200,7 +200,7 @@ export default function DisputePage() {
               {durationLabel ? ` · ${durationLabel}` : " · 長さ確認中…"}
               {durationSec != null && durationSec > MAX_DURATION_SEC && (
                 <span className="ml-1 font-semibold text-coral">
-                  （3分超えてるよ）
+                  （3分を超えています）
                 </span>
               )}
             </p>

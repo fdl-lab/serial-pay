@@ -11,7 +11,7 @@ export async function POST(req: Request) {
     const form = await req.formData();
     const file = form.get("file");
     if (!(file instanceof Blob)) {
-      throw new ApiError(400, "画像を選んでね", "FILE_REQUIRED");
+      throw new ApiError(400, "画像を選択してください", "FILE_REQUIRED");
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());

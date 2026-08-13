@@ -7,7 +7,7 @@ export async function startStripeIdentityEkyc(userId: string) {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw new ApiError(404, "ユーザーが見つかりません", "USER_NOT_FOUND");
   if (!user.phoneVerified) {
-    throw new ApiError(403, "先にLINEログインを完了してね", "PHONE_REQUIRED");
+    throw new ApiError(403, "先にLINEログインを完了してください", "PHONE_REQUIRED");
   }
   if (user.ekycStatus === "APPROVED") {
     throw new ApiError(409, "本人確認は完了済みです", "EKYC_ALREADY_DONE");

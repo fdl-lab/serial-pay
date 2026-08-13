@@ -94,7 +94,7 @@ export async function requireUser(req: Request): Promise<User> {
           throw new ApiError(
             403,
             user.suspendReason === "deleted"
-              ? "退会済みのアカウントだよ"
+              ? "退会済みのアカウントです"
               : "アカウントが停止されています",
             user.suspendReason === "deleted" ? "DELETED" : "SUSPENDED",
           );
@@ -120,7 +120,7 @@ export async function requireUser(req: Request): Promise<User> {
         throw new ApiError(
           403,
           user.suspendReason === "deleted"
-            ? "退会済みのアカウントだよ"
+            ? "退会済みのアカウントです"
             : "アカウントが停止されています",
           user.suspendReason === "deleted" ? "DELETED" : "SUSPENDED",
         );
@@ -144,7 +144,7 @@ export async function requireUser(req: Request): Promise<User> {
       throw new ApiError(
         403,
         user.suspendReason === "deleted"
-          ? "退会済みのアカウントだよ"
+          ? "退会済みのアカウントです"
           : "アカウントが停止されています",
         user.suspendReason === "deleted" ? "DELETED" : "SUSPENDED",
       );

@@ -97,7 +97,7 @@ export async function createCheckout(buyer: User, raw: unknown) {
   if (stripePaidYen > 0 && stripePaidYen < 50) {
     throw new ApiError(
       400,
-      "カード支払額が50円未満になるよ。残高の使い方を調整してね",
+      "カード支払額が50円未満になります。残高の使い方を調整してください",
       "STRIPE_AMOUNT_TOO_SMALL",
     );
   }
@@ -532,7 +532,7 @@ export async function revealCodesForBuyer(buyerId: string, transactionId: string
       await forfeitUnrevealedTransaction(tx.id, { actorUserId: buyerId });
       throw new ApiError(
         409,
-        `開示期限（購入から${holdH}時間）が切れたよ。返金なしで取引完了・評価★1になったよ`,
+        `開示期限（購入から${holdH}時間）が切れました。返金なしで取引完了・評価★1になりました`,
         "REVEAL_EXPIRED",
       );
     }

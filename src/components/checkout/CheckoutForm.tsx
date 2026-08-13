@@ -164,7 +164,7 @@ export function CheckoutClient({ transactionId }: { transactionId: string }) {
   }
 
   if (!session || !options) {
-    return <p className="text-ink-soft">決済情報が見つからないよ</p>;
+    return <p className="text-ink-soft">決済情報が見つかりません</p>;
   }
 
   if (!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) {

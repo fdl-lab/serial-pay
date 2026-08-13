@@ -62,7 +62,7 @@ export function ProfileCard() {
       if (!res.ok) throw new Error(json.error ?? "保存失敗");
       setUser(json.user);
       setEditing(false);
-      setMsg("プロフィールを保存したよ");
+      setMsg("プロフィールを保存しました");
     } catch (e) {
       setError(e instanceof Error ? e.message : "エラー");
     } finally {
@@ -83,7 +83,7 @@ export function ProfileCard() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "アップロード失敗");
       setUser(json.user);
-      setMsg("画像を更新したよ");
+      setMsg("画像を更新しました");
     } catch (e) {
       setError(e instanceof Error ? e.message : "エラー");
     } finally {
@@ -213,7 +213,7 @@ export function ProfileCard() {
         </p>
         <p className="mt-1 font-mono font-semibold">{user.publicId ?? "—"}</p>
         <p className="mt-1 text-xs text-ink-soft">
-          なりすまし対策用。名前や画像を変えてもこのIDは変わらないよ。
+          なりすまし対策用です。名前や画像を変えても、このIDは変わりません。
         </p>
       </div>
 
@@ -334,7 +334,7 @@ function AccountDeleteSection() {
         <div className="mt-3 space-y-3 rounded-xl border border-coral/30 bg-coral/5 p-3 text-sm">
           <p className="font-bold text-coral">退会の確認</p>
           <p className="text-ink-soft">
-            未完了の取引がある場合は退会できないよ。退会後は同じアカウントは復活せず、同じLINEでは30日間再登録できないよ。
+            未完了の取引がある場合は退会できません。退会後は同じアカウントは復活せず、同じLINEでは30日間再登録できません。
           </p>
 
           {openTxs.length > 0 && (
@@ -385,11 +385,11 @@ function AccountDeleteSection() {
 
           {canDelete ? (
             <p className="font-semibold text-ink">
-              いま退会できる状態だよ。本当に退会する？
+              現在、退会できる状態です。本当に退会しますか？
             </p>
           ) : (
             <p className="font-semibold text-coral">
-              上の未完了取引を片付けると「退会を確定する」が押せるよ
+              上の未完了取引を完了すると、「退会を確定する」を押せます
             </p>
           )}
 

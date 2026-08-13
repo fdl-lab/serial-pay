@@ -4,15 +4,15 @@ import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 const ERROR_MSG: Record<string, string> = {
-  line_config: "LINE_CHANNEL_ID / SECRET が未設定だよ。.env.local を確認してね",
-  line_denied: "LINEログインがキャンセルされたみたい",
-  line_state: "セキュリティ検証に失敗したよ。もう一度試してね",
-  line_callback: "LINEログイン処理に失敗したよ。コールバックURLを確認してね",
-  line_banned: "このLINEアカウントは利用停止中だよ",
+  line_config: "LINE_CHANNEL_ID / SECRET が未設定です。.env.local を確認してください",
+  line_denied: "LINEログインがキャンセルされました",
+  line_state: "セキュリティ検証に失敗しました。もう一度お試しください",
+  line_callback: "LINEログイン処理に失敗しました。コールバックURLを確認してください",
+  line_banned: "このLINEアカウントは利用停止中です",
   line_cooldown:
-    "退会後30日間は同じLINEで再登録できないよ。期限後は新しいアカウントになるよ（昔のアカウントは復活しないよ）",
-  line_blocked: "このアカウントではログインできないよ",
-  line: "LINEログインに失敗したよ。もう一度試してみてね",
+    "退会後30日間は同じLINEで再登録できません。期限後は新しいアカウントになります（以前のアカウントは復活しません）",
+  line_blocked: "このアカウントではログインできません",
+  line: "LINEログインに失敗しました。もう一度お試しください",
 };
 
 export function LineAuthForm({ redirectTo = "/verify" }: { redirectTo?: string }) {
@@ -36,7 +36,7 @@ export function LineAuthForm({ redirectTo = "/verify" }: { redirectTo?: string }
         <p className="brand-mark">シリアルPay</p>
         <h1 className="text-3xl font-extrabold tracking-tight">LINEでログイン</h1>
         <p className="mt-2 text-ink-soft">
-          LINEアカウントでかんたんログイン。購入・出品には本人確認（eKYC）も必要だよ。
+          LINEアカウントでかんたんにログインできます。購入・出品には本人確認（eKYC）も必要です。
         </p>
       </header>
 
@@ -51,7 +51,7 @@ export function LineAuthForm({ redirectTo = "/verify" }: { redirectTo?: string }
       </button>
 
       <p className="mt-4 text-center text-xs text-ink-soft">
-        ログイン後、本人確認ページに進むよ
+        ログイン後、本人確認ページに進みます
       </p>
 
       {error && <p className="banner-error mt-4">{error}</p>}

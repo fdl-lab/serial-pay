@@ -45,14 +45,14 @@ export function assertRecordingFileMeta(opts: {
   if (!RECORDING_ALLOWED_MIME.has(opts.contentType)) {
     throw new ApiError(
       400,
-      "対応形式は MP4 / MOV / WebM だよ",
+      "対応形式は MP4 / MOV / WebM です",
       "INVALID_MEDIA_TYPE",
     );
   }
   if (opts.size <= 0 || opts.size > RECORDING_MAX_BYTES) {
     throw new ApiError(
       400,
-      "動画は100MB以内にしてね（必要箇所を3分以内に切り取り）",
+      "動画は100MB以内にしてください（必要箇所を3分以内に切り取り）",
       "FILE_TOO_LARGE",
     );
   }

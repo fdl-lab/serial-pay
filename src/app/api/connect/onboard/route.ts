@@ -40,11 +40,11 @@ export async function POST(req: Request) {
           if (msg.includes("signed up for Connect") || msg.includes("Connect")) {
             throw new ApiError(
               400,
-              "Stripe Dashboard で Connect を有効化してね（Settings → Connect → Get started）。テストモードでも必要だよ。",
+              "Stripe Dashboard で Connect を有効化してください（Settings → Connect → Get started）。テストモードでも必要です。",
               "CONNECT_PLATFORM_REQUIRED",
             );
           }
-          throw new ApiError(400, msg || "Stripe Connect の開始に失敗したよ", "STRIPE_ERROR");
+          throw new ApiError(400, msg || "Stripe Connect の開始に失敗しました", "STRIPE_ERROR");
         }
         throw e;
       }

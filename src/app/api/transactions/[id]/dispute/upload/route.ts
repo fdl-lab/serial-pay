@@ -24,25 +24,25 @@ export async function POST(req: Request, ctx: Ctx) {
       throw new ApiError(409, "異議申し立てできる期間ではありません", "INVALID_STATE");
     }
     if (tx.buyerConfirmedAt) {
-      throw new ApiError(409, "受取確認済みのため異議は出せないよ", "ALREADY_CONFIRMED");
+      throw new ApiError(409, "受取確認済みのため異議は出せません", "ALREADY_CONFIRMED");
     }
 
     const form = await req.formData();
     const file = form.get("file");
     if (!(file instanceof File)) {
-      throw new ApiError(400, "動画ファイルを添付してね", "FILE_REQUIRED");
+      throw new ApiError(400, "動画ファイルを添付してください", "FILE_REQUIRED");
     }
 
     const durationRaw = form.get("durationSec");
     const durationSec =
       typeof durationRaw === "string" ? Number(durationRaw) : NaN;
     if (!Number.isFinite(durationSec) || durationSec < 5) {
-      throw new ApiError(400, "動画の長さを確認できなかったよ", "DURATION_REQUIRED");
+      throw new ApiError(400, "動画の長さを確認できませんでした", "DURATION_REQUIRED");
     }
     if (durationSec > RECORDING_MAX_DURATION_SEC) {
       throw new ApiError(
         400,
-        "必要箇所を3分以内に切り取ってからアップしてね（編集・AI加工は不可）",
+        "必要箇所を3分以内に切り取ってからアップロードしてください（編集・AI加工は不可）",
         "DURATION_TOO_LONG",
       );
     }

@@ -22,7 +22,7 @@ export function RatingForm({ transactionId, onDone }: Props) {
     e.preventDefault();
     if (busy) return;
     if (score == null) {
-      setError("★をタップして選んでね");
+      setError("★をタップして選択してください");
       return;
     }
     setBusy(true);
@@ -57,8 +57,8 @@ export function RatingForm({ transactionId, onDone }: Props) {
   if (done) {
     return (
       <div className="rounded-2xl border border-mint/40 bg-mint/10 p-4 text-sm">
-        <p className="font-bold text-mint-deep">評価ありがとう！取引完了だよ</p>
-        <p className="mt-1 text-ink-soft">出品者へ売上が反映されたよ</p>
+        <p className="font-bold text-mint-deep">ご評価ありがとうございます。取引が完了しました</p>
+        <p className="mt-1 text-ink-soft">出品者へ売上が反映されました</p>
       </div>
     );
   }
@@ -71,14 +71,14 @@ export function RatingForm({ transactionId, onDone }: Props) {
       <div>
         <p className="font-bold">評価して取引を完了する</p>
         <p className="mt-1 text-sm text-ink-soft">
-          ★をタップして選んでから、完了ボタンを押してね
+          ★をタップして選んでから、完了ボタンを押してください
         </p>
       </div>
 
       <div>
         <p className="mb-1.5 text-sm font-semibold">
           {score == null ? (
-            <span className="text-coral">★を選んでね</span>
+            <span className="text-coral">★を選択してください</span>
           ) : (
             <>
               選択中{" "}
@@ -141,7 +141,7 @@ export function RatingForm({ transactionId, onDone }: Props) {
         {busy
           ? "送信中…"
           : score == null
-            ? "先に★を選んでね"
+            ? "先に★を選択してください"
             : `★${score} で評価して取引完了`}
       </button>
     </form>

@@ -77,34 +77,34 @@ export async function createBuyerRating(
     throw new ApiError(404, "取引が見つかりません", "TX_NOT_FOUND");
   }
   if (tx.ratings.length > 0) {
-    throw new ApiError(409, "すでに評価済みだよ", "ALREADY_RATED");
+    throw new ApiError(409, "すでに評価済みです", "ALREADY_RATED");
   }
   if (tx.status === "COMPLETED") {
     throw new ApiError(
       409,
-      "この取引はすでに完了しているよ（期限切れで自動完了した場合は追加評価できないよ）",
+      "この取引はすでに完了しています（期限切れで自動完了した場合は追加評価できません）",
       "ALREADY_COMPLETED",
     );
   }
   if (tx.status !== "CONFIRMATION_WINDOW") {
-    throw new ApiError(409, "いまは評価できない状態だよ", "INVALID_STATE");
+    throw new ApiError(409, "いまは評価できない状態です", "INVALID_STATE");
   }
   if (tx.confirmationDeadlineAt && tx.confirmationDeadlineAt < new Date()) {
     throw new ApiError(
       409,
-      "確認期限が過ぎているよ。自動完了を待つかマイページを確認してね",
+      "確認期限が過ぎています。自動完了を待つか、マイページを確認してください",
       "DEADLINE_PASSED",
     );
   }
   if (!tx.buyerConfirmedAt) {
     throw new ApiError(
       409,
-      "先に「使えたので受取確認する」を押してね",
+      "先に「使えたので受取確認する」を押してください",
       "CONFIRM_REQUIRED",
     );
   }
   if (tx.escrowStatus === "RELEASED") {
-    throw new ApiError(409, "すでに売上反映済みだよ", "ALREADY_RELEASED");
+    throw new ApiError(409, "すでに売上反映済みです", "ALREADY_RELEASED");
   }
 
   const now = new Date();

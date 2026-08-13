@@ -42,8 +42,8 @@ function sellerInitial(name: string) {
 
 export function ItemList({
   items,
-  emptyTitle = "まだ出品がないよ",
-  emptyDescription = "最初のシリアルを出品してみてね",
+  emptyTitle = "まだ出品がありません",
+  emptyDescription = "最初のシリアルを出品してみましょう",
 }: Props) {
   if (items.length === 0) {
     return (

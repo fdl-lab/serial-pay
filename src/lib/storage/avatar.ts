@@ -60,12 +60,12 @@ export function assertAvatarMeta(opts: { contentType: string; size: number }) {
   if (!AVATAR_ALLOWED_MIME.has(mime)) {
     throw new ApiError(
       400,
-      "画像は JPEG / PNG / WebP / GIF にしてね（iPhoneは「互換性のあるフォーマット」で保存してみて）",
+      "画像は JPEG / PNG / WebP / GIF にしてください（iPhoneは「互換性のあるフォーマット」で保存してください）",
       "INVALID_MEDIA_TYPE",
     );
   }
   if (opts.size <= 0 || opts.size > AVATAR_MAX_BYTES) {
-    throw new ApiError(400, "プロフィール画像は2MB以内にしてね", "FILE_TOO_LARGE");
+    throw new ApiError(400, "プロフィール画像は2MB以内にしてください", "FILE_TOO_LARGE");
   }
 }
 
@@ -109,7 +109,7 @@ export async function uploadAvatar(opts: {
   if (opts.buffer.byteLength > AVATAR_DATA_URL_MAX_BYTES) {
     throw new ApiError(
       400,
-      "画像が大きすぎるよ。もう一度選び直すか、別の写真を試してね",
+      "画像が大きすぎます。もう一度選び直すか、別の写真をお試しください",
       "FILE_TOO_LARGE",
     );
   }

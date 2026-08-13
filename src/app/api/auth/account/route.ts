@@ -29,7 +29,7 @@ export async function POST(req: Request) {
       const status = await getAccountDeletionBlockers(user.id);
       return jsonOk({ ...result, ...status });
     }
-    throw new ApiError(400, "不正なリクエストだよ", "BAD_REQUEST");
+    throw new ApiError(400, "不正なリクエストです", "BAD_REQUEST");
   } catch (e) {
     return jsonError(e);
   }

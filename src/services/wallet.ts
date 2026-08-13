@@ -134,7 +134,7 @@ export async function creditWalletRefund(
  */
 export async function requestPayout(user: User, amountYen: number) {
   if (!Number.isInteger(amountYen) || amountYen < 500) {
-    throw new ApiError(400, "出金額は500円以上で指定してね", "AMOUNT_INVALID");
+    throw new ApiError(400, "出金額は500円以上で指定してください", "AMOUNT_INVALID");
   }
   if (user.stripeConnectStatus !== "ACTIVE" || !user.stripeConnectAccountId) {
     throw new ApiError(
@@ -254,6 +254,6 @@ export async function requestPayout(user: User, amountYen: number) {
         },
       });
     });
-    throw new ApiError(502, "出金処理に失敗しました。残高は戻してあるよ", "PAYOUT_FAILED");
+    throw new ApiError(502, "出金処理に失敗しました。残高は戻してあります", "PAYOUT_FAILED");
   }
 }

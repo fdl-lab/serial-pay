@@ -55,11 +55,11 @@ export async function getAccountDeletionBlockers(userId: string) {
   const blockers: string[] = [];
   if (openTransactions.length > 0) {
     blockers.push(
-      `未完了の取引が${openTransactions.length}件あるよ。完了・キャンセルしてから退会してね`,
+      `未完了の取引が${openTransactions.length}件あります。完了・キャンセルしてから退会してください`,
     );
   }
   if (wallet && wallet.pendingYen > 0) {
-    blockers.push("出金申請中の残高があるよ。完了を待ってから退会してね");
+    blockers.push("出金申請中の残高があります。完了を待ってから退会してください");
   }
 
   return {
@@ -82,7 +82,7 @@ export async function cancelOwnPendingPayment(userId: string, transactionId: str
     throw new ApiError(404, "取引が見つかりません", "TX_NOT_FOUND");
   }
   if (tx.status !== "PENDING_PAYMENT") {
-    throw new ApiError(409, "支払い待ち以外はここではキャンセルできないよ", "INVALID_STATE");
+    throw new ApiError(409, "支払い待ち以外はここではキャンセルできません", "INVALID_STATE");
   }
 
   await prisma.$transaction(async (db) => {
@@ -151,13 +151,13 @@ export async function cancelOwnPendingPayment(userId: string, transactionId: str
 export async function deleteAccount(userId: string) {
   const check = await getAccountDeletionBlockers(userId);
   if (!check.canDelete) {
-    throw new ApiError(409, check.blockers[0] ?? "いまは退会できないよ", "DELETE_BLOCKED");
+    throw new ApiError(409, check.blockers[0] ?? "いまは退会できません", "DELETE_BLOCKED");
   }
 
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw new ApiError(404, "ユーザーが見つかりません", "NOT_FOUND");
   if (user.isSuspended && user.suspendReason === "deleted") {
-    throw new ApiError(409, "すでに退会済みだよ", "ALREADY_DELETED");
+    throw new ApiError(409, "すでに退会済みです", "ALREADY_DELETED");
   }
 
   const lineUserId =

@@ -169,7 +169,7 @@ export function CodeRevealScreen({
         )}
         {accepted !== true && !data && (
           <p className="mt-1 text-ink-soft">
-            準備ができたら画録を開始してコードを表示してね。保留もできるよ。
+            準備ができたら画面録画を開始し、コードを表示してください。保留もできます。
           </p>
         )}
       </header>
@@ -207,8 +207,8 @@ export function CodeRevealScreen({
           </div>
           <p className="text-sm text-ink-soft">
             {data?.status === "DISPUTED" || data?.confirmationTimerPaused
-              ? "異議の審査が終わるまで自動完了は進まないよ。結果はメッセージで届くね。"
-              : "受取確認のあと、出品者を評価すると取引完了・売上反映になるよ。期限を過ぎると評価なしでも自動完了するよ。"}
+              ? "異議の審査が終わるまで、自動完了は進みません。結果はメッセージでお知らせします。"
+              : "受取確認のあと、出品者を評価すると取引完了・売上反映になります。期限を過ぎると、評価なしでも自動完了します。"}
           </p>
         </div>
       )}
@@ -239,7 +239,7 @@ export function CodeRevealScreen({
                 className="btn btn-ghost shrink-0 !px-3 !py-2 text-xs"
                 onClick={() => copyCode(c.id, c.plaintext)}
               >
-                {copiedId === c.id ? "コピーした！" : "コピー"}
+                {copiedId === c.id ? "コピーしました" : "コピー"}
               </button>
             </li>
           ))}
@@ -274,7 +274,7 @@ export function CodeRevealScreen({
       {accepted && data && confirmed && !completed && data.status !== "DISPUTED" && (
         <div className="mt-5 space-y-3">
           <p className="rounded-xl border border-mint/30 bg-mint/10 px-3 py-2 text-sm font-semibold text-mint-deep">
-            受取確認OK！下の星を選んで「評価して取引完了」を押してね
+            受取確認が完了しました。下の星を選んで「評価して取引完了」を押してください
           </p>
           <RatingForm
             transactionId={transactionId}
@@ -290,7 +290,7 @@ export function CodeRevealScreen({
 
       {completed && (
         <p className="banner-ok mt-5">
-          取引完了！評価ありがとう。出品者へ売上が反映されたよ。
+          取引が完了しました。ご評価ありがとうございます。出品者へ売上が反映されました。
         </p>
       )}
 

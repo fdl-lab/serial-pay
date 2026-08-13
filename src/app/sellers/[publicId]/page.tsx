@@ -43,7 +43,7 @@ export default async function SellerProfilePage({ params }: Props) {
             <p className="mt-1 text-sm text-ink-soft">
               {rating
                 ? `評価 ★${rating}（${seller.ratingCount}件）`
-                : "評価まだなし"}
+                : "評価はまだありません"}
               {" · "}
               売上 {seller.completedSales}件
             </p>
@@ -51,13 +51,13 @@ export default async function SellerProfilePage({ params }: Props) {
         </div>
 
         <p className="rounded-xl bg-ink/5 px-3 py-2 text-xs text-ink-soft">
-          公開IDは変更できないよ。名前や画像が変わっても、同じ人かどうかの目印になるよ。
+          公開IDは変更できません。名前や画像が変わっても、同じ人かどうかの目印になります。
         </p>
 
         <div>
           <h2 className="text-lg font-bold">評価一覧</h2>
           {seller.ratings.length === 0 ? (
-            <p className="mt-2 text-sm text-ink-soft">まだ評価はないよ</p>
+            <p className="mt-2 text-sm text-ink-soft">まだ評価はありません</p>
           ) : (
             <ul className="mt-3 divide-y divide-ink/10">
               {seller.ratings.map((r) => (

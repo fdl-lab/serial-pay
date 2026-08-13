@@ -58,7 +58,7 @@ export function VerificationStatusCard() {
       <section className="card-surface">
         <p className="text-sm font-semibold text-ink-soft">アカウント</p>
         <p className="mt-1 font-bold">未ログイン</p>
-        <p className="mt-2 text-sm text-ink-soft">LINEログインから始めてね</p>
+        <p className="mt-2 text-sm text-ink-soft">LINEログインから始めてください</p>
         <Link href="/auth" className="btn btn-primary btn-block mt-4">
           LINEでログイン
         </Link>

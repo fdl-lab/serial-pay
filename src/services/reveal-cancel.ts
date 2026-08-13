@@ -32,7 +32,7 @@ export async function forfeitUnrevealedTransaction(
   if (tx.status !== "PAID_ESCROW" || tx.codeRevealedAt) {
     throw new ApiError(
       409,
-      "開示前の保留中だけ期限切れ処理できるよ",
+      "開示前の保留中のみ期限切れ処理できます",
       "INVALID_STATE",
     );
   }
@@ -42,7 +42,7 @@ export async function forfeitUnrevealedTransaction(
     tx.revealDeadlineAt ??
     new Date(tx.createdAt.getTime() + holdH * 60 * 60_000);
   if (deadline > new Date()) {
-    throw new ApiError(409, "まだ開示期限前だよ", "NOT_EXPIRED");
+    throw new ApiError(409, "まだ開示期限前です", "NOT_EXPIRED");
   }
 
   const now = new Date();
@@ -103,10 +103,10 @@ export async function forfeitUnrevealedTransaction(
   await createUserMessage({
     userId: tx.buyerId,
     kind: "REVEAL_EXPIRED",
-    title: "開示期限が切れて取引完了したよ",
+    title: "開示期限が切れて取引完了しました",
     body: [
-      `「${tx.item.title}」は購入から${holdH}時間以内に開示されなかったため、取引完了になったよ。`,
-      "返金はされないよ。購入者評価に★1が記録されたよ。",
+      `「${tx.item.title}」は購入から${holdH}時間以内に開示されなかったため、取引完了になりました。`,
+      "返金はされません。購入者評価に★1が記録されました。",
     ].join("\n"),
     linkHref: "/me",
     linkLabel: "マイページを見る",
@@ -119,8 +119,8 @@ export async function forfeitUnrevealedTransaction(
     kind: "REVEAL_EXPIRED_SELLER",
     title: "未開示のまま期限切れ → 売上確定",
     body: [
-      `「${tx.item.title}」は購入者が開示せず期限切れになったよ。`,
-      "売上はウォレットに反映済み。購入者には評価★1が付いたよ。",
+      `「${tx.item.title}」は購入者が開示せず期限切れになりました。`,
+      "売上はウォレットに反映済みです。購入者には評価★1が付きました。",
     ].join("\n"),
     linkHref: "/me",
     linkLabel: "マイページを見る",

@@ -58,7 +58,7 @@ export function BuyPanel({
       const json = await res.json();
       if (!res.ok) {
         if (json.code === "PHONE_REQUIRED" || json.code === "EKYC_REQUIRED") {
-          setError(`${json.error} → 本人確認ページへ進んでね`);
+          setError(`${json.error} → 本人確認ページへ進んでください`);
           return;
         }
         throw new Error(json.error ?? "購入に失敗しました");
@@ -74,7 +74,7 @@ export function BuyPanel({
         return;
       }
 
-      throw new Error("予期しないレスポンスだよ");
+      throw new Error("予期しないレスポンスです");
     } catch (e) {
       setError(e instanceof Error ? e.message : "エラー");
     } finally {
@@ -86,7 +86,7 @@ export function BuyPanel({
     <div className="space-y-3 border-t border-ink/10 pt-4">
       {trial && (
         <p className="rounded-xl bg-mint/15 px-3 py-2.5 text-sm font-semibold leading-relaxed text-mint-deep">
-          こんな感じで買えるよ、試してみてね！カード不要の0円お試しだよ ✌️
+          購入の流れを無料でお試しできます。カード不要の0円トライアルです。
         </p>
       )}
 

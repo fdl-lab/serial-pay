@@ -7,7 +7,7 @@ export async function GET(_req: Request, _ctx: Ctx) {
   return jsonError(
     new ApiError(
       410,
-      "この画像URLは使えなくなったよ。プロフィール画像を再度アップロードしてね",
+      "この画像URLは使えなくなりました。プロフィール画像を再度アップロードしてください",
       "AVATAR_GONE",
     ),
   );

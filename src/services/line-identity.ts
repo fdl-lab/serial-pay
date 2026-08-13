@@ -33,7 +33,7 @@ export async function assertLineCanSignIn(
   if (identity.bannedAt) {
     throw new ApiError(
       403,
-      "このLINEアカウントは利用停止中だよ",
+      "このLINEアカウントは利用停止中です",
       "LINE_BANNED",
     );
   }
@@ -44,7 +44,7 @@ export async function assertLineCanSignIn(
       const unlockLabel = unlockAt.toLocaleString("ja-JP");
       throw new ApiError(
         403,
-        `退会後${LINE_REJOIN_COOLDOWN_DAYS}日間は同じLINEで再登録できないよ（解除目安: ${unlockLabel}）。古いアカウントは復活せず、期限後は新規アカウントになるよ`,
+        `退会後${LINE_REJOIN_COOLDOWN_DAYS}日間は同じLINEで再登録できません（解除目安: ${unlockLabel}）。古いアカウントは復活せず、期限後は新規アカウントになります`,
         "LINE_COOLDOWN",
       );
     }

@@ -64,7 +64,7 @@ export async function syncLineUser(
       throw new ApiError(
         403,
         existing.suspendReason === "deleted"
-          ? "退会済みのアカウントだよ"
+          ? "退会済みのアカウントです"
           : "アカウントが停止されています",
         existing.suspendReason === "deleted" ? "DELETED" : "SUSPENDED",
       );
@@ -180,8 +180,8 @@ const profileSchema = z.object({
   displayName: z
     .string()
     .trim()
-    .min(1, "名前を入力してね")
-    .max(40, "名前は40文字以内にしてね"),
+    .min(1, "名前を入力してください")
+    .max(40, "名前は40文字以内にしてください"),
   avatarUrl: z.union([z.string().url(), z.null()]).optional(),
 });
 

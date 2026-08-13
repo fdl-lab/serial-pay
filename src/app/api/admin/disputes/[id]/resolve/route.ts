@@ -15,7 +15,7 @@ function assertAdmin(req: Request) {
   const header = req.headers.get("x-admin-secret");
   if (secret && header === secret) return;
   if (process.env.DEV_AUTH_BYPASS === "true") return;
-  throw new ApiError(403, "管理者のみ操作できるよ", "FORBIDDEN");
+  throw new ApiError(403, "管理者のみ操作できます", "FORBIDDEN");
 }
 
 /** 事務局審査（ADMIN_API_SECRET または DEV_AUTH_BYPASS） */

@@ -64,7 +64,7 @@ export function PayoutRequestModal({
         <p className="text-sm font-extrabold text-coral">振込申請</p>
         <h2 className="mt-1 text-xl font-bold tracking-tight">銀行口座へ出金</h2>
         <p className="mt-2 text-sm text-ink-soft">
-          出金額に加えて振込手数料 {formatYen(payoutFeeYen)} が差し引かれるよ。
+          出金額に加えて振込手数料 {formatYen(payoutFeeYen)} が差し引かれます。
         </p>
 
         <label className="field mt-4">

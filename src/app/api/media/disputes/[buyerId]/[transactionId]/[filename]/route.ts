@@ -26,7 +26,7 @@ export async function GET(req: Request, ctx: Ctx) {
         select: { buyerId: true, sellerId: true },
       });
       if (!tx || (tx.buyerId !== user.id && tx.sellerId !== user.id)) {
-        throw new ApiError(403, "閲覧権限がないよ", "FORBIDDEN");
+        throw new ApiError(403, "閲覧権限がありません", "FORBIDDEN");
       }
     }
 

@@ -53,7 +53,7 @@ export default async function HomePage({ searchParams }: Props) {
 
       {loadError ? (
         <p className="banner-error">
-          一覧の取得に失敗したよ。少し待って再読み込みしてね。
+          一覧の取得に失敗しました。少し待ってから再読み込みしてください。
         </p>
       ) : (
         <>
@@ -69,12 +69,12 @@ export default async function HomePage({ searchParams }: Props) {
           <ItemList
             items={items}
             emptyTitle={
-              query ? "見つからなかったよ" : "まだ出品がないよ"
+              query ? "見つかりませんでした" : "まだ出品がありません"
             }
             emptyDescription={
               query
-                ? "別のキーワードで試してみてね"
-                : "最初のシリアルを出品してみてね"
+                ? "別のキーワードでお試しください"
+                : "最初のシリアルを出品してみてください"
             }
           />
         </>

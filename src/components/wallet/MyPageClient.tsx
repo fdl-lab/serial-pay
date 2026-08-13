@@ -70,8 +70,8 @@ function MyPageInner() {
         if (cancelled) return;
         setConnectMsg(
           json.status === "ACTIVE"
-            ? "銀行口座の登録が完了したよ"
-            : "口座登録はまだ完了していないみたい。もう一度「銀行口座を登録」から進めてね",
+            ? "銀行口座の登録が完了しました"
+            : "口座登録はまだ完了していません。もう一度「銀行口座を登録」から進めてください",
         );
         await load();
       } catch (e) {
@@ -126,7 +126,7 @@ function MyPageInner() {
             <h2 className="text-lg font-bold">最近の残高履歴</h2>
             <ul className="mt-3 divide-y divide-ink/10">
               {data.recent.length === 0 && (
-                <li className="py-3 text-sm text-ink-soft">まだ履歴はないよ</li>
+                <li className="py-3 text-sm text-ink-soft">まだ履歴はありません</li>
               )}
               {data.recent.map((row) => (
                 <li key={row.id} className="flex items-center justify-between py-3 text-sm">

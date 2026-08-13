@@ -78,7 +78,7 @@ export function ListingForm({ onCreated }: Props) {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "出品に失敗しました");
-      setMessage(`出品できたよ！ ID: ${json.item.id}`);
+      setMessage(`出品が完了しました。ID: ${json.item.id}`);
       onCreated?.(json.item.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "エラーが発生しました");
@@ -93,7 +93,7 @@ export function ListingForm({ onCreated }: Props) {
         <p className="brand-mark">シリアルPay</p>
         <h1 className="text-3xl font-extrabold tracking-tight">出品する</h1>
         <p className="mt-2 text-ink-soft">
-          コードは暗号化して保存されるよ。平文はサーバーに残さない設計。
+          コードは暗号化して保存されます。平文はサーバーに残さない設計です。
         </p>
       </header>
 
@@ -200,7 +200,7 @@ export function ListingForm({ onCreated }: Props) {
         <span>
           シリアルコード（1行1件）
           {listingType === "SET"
-            ? ` · セット枚数と一致させてね（現在 ${codes.length} / ${setQuantity}）`
+            ? ` · セット枚数と一致させてください（現在 ${codes.length} / ${setQuantity}）`
             : ` · 現在 ${codes.length} 件`}
         </span>
         <textarea

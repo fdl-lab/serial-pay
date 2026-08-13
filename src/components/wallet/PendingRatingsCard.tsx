@@ -55,9 +55,9 @@ export function PendingRatingsCard() {
   return (
     <section className="card-surface space-y-3">
       <div>
-        <h2 className="text-lg font-bold">評価して完了してね</h2>
+        <h2 className="text-lg font-bold">評価して取引を完了してください</h2>
         <p className="mt-1 text-sm text-ink-soft">
-          受取確認済みで、まだ評価していない取引があるよ。評価すると取引完了になるよ
+          受取確認済みで、まだ評価していない取引があります。評価すると取引完了になります
         </p>
       </div>
       <ul className="divide-y divide-ink/10">

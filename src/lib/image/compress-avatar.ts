@@ -26,12 +26,12 @@ export async function compressAvatarFile(
     canvas.width = w;
     canvas.height = h;
     const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("画像の変換に失敗したよ");
+    if (!ctx) throw new Error("画像の変換に失敗しました");
     ctx.drawImage(bitmap, 0, 0, w, h);
 
     const blob = await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob(
-        (b) => (b ? resolve(b) : reject(new Error("画像の圧縮に失敗したよ"))),
+        (b) => (b ? resolve(b) : reject(new Error("画像の圧縮に失敗しました"))),
         "image/jpeg",
         quality,
       );
@@ -57,7 +57,7 @@ function loadHtmlImage(src: string): Promise<HTMLImageElement> {
     img.onerror = () =>
       reject(
         new Error(
-          "この形式の画像は開けなかったよ。JPEG / PNG で試してみてね",
+          "この形式の画像は開けませんでした。JPEG / PNG でお試しください",
         ),
       );
     img.src = src;

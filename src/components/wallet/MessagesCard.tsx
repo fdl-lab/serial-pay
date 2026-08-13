@@ -93,7 +93,7 @@ export function MessagesCard() {
       </div>
 
       {messages.length === 0 && (
-        <p className="text-sm text-ink-soft">まだメッセージはないよ</p>
+        <p className="text-sm text-ink-soft">まだメッセージはありません</p>
       )}
 
       <ul className="divide-y divide-ink/10">
