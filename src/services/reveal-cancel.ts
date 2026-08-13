@@ -1,15 +1,16 @@
 import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/lib/api";
-import { getStripe, revealHoldHours } from "@/lib/stripe";
-import { creditWalletRefund } from "@/services/wallet";
+import { revealHoldHours } from "@/lib/stripe";
+import { creditSaleToWallet } from "@/services/wallet";
 import { applyRevealExpiredBuyerPenalty } from "@/services/rating";
 import { createUserMessage } from "@/services/messages";
 
 /**
- * 開示前（PAID_ESCROW）の強制キャンセル（開示期限切れのみ）。
- * 購入者からの任意キャンセルは不可。返金＋在庫戻し＋購入者評価★1。
+ * 開示前（PAID_ESCROW）の期限切れ処理。
+ * 返金はしない（放置＝キャンセル回避の抜け穴を塞ぐ）。
+ * 出品者へ売上確定 + 購入者に評価★1。コードは未開示のまま無効化。
  */
-export async function cancelUnrevealedTransaction(
+export async function forfeitUnrevealedTransaction(
   transactionId: string,
   opts?: { actorUserId?: string | null },
 ) {
@@ -20,8 +21,12 @@ export async function cancelUnrevealedTransaction(
 
   if (!tx) throw new ApiError(404, "取引が見つかりません", "TX_NOT_FOUND");
 
-  if (tx.status === "CANCELLED" || tx.status === "EXPIRED" || tx.status === "REFUNDED") {
-    return { transactionId: tx.id, alreadyCancelled: true as const, status: tx.status };
+  if (tx.status === "COMPLETED" || tx.escrowStatus === "RELEASED") {
+    return {
+      transactionId: tx.id,
+      alreadySettled: true as const,
+      status: tx.status,
+    };
   }
 
   if (tx.status !== "PAID_ESCROW" || tx.codeRevealedAt) {
@@ -40,78 +45,50 @@ export async function cancelUnrevealedTransaction(
     throw new ApiError(409, "まだ開示期限前だよ", "NOT_EXPIRED");
   }
 
-  let refundId: string | null = null;
-  if (tx.stripePaidYen > 0) {
-    if (!tx.stripePaymentIntentId) {
-      throw new ApiError(400, "PaymentIntent がありません", "NO_PI");
-    }
-    const stripe = getStripe();
-    const refund = await stripe.refunds.create({
-      payment_intent: tx.stripePaymentIntentId,
-      amount: tx.stripePaidYen,
-      metadata: {
-        transactionId: tx.id,
-        reason: "reveal_expired",
-      },
-    });
-    refundId = refund.id;
-  }
-
-  const codes = await prisma.serialCode.findMany({
-    where: { transactionId: tx.id },
-    select: { id: true },
-  });
+  const now = new Date();
 
   await prisma.$transaction(async (db) => {
-    if (codes.length > 0) {
-      await db.serialCode.updateMany({
-        where: { id: { in: codes.map((c) => c.id) } },
-        data: {
-          status: "AVAILABLE",
-          assignedAt: null,
-          reservedAt: null,
-          reservedUntil: null,
-          transactionId: null,
-        },
-      });
-      await db.item.update({
-        where: { id: tx.itemId },
-        data: {
-          stockAvailable: { increment: codes.length },
-          status: "ACTIVE",
-          soldOutAt: null,
-        },
-      });
-    }
+    // 未開示のまま売上確定するので、コードは再利用不可にする
+    await db.serialCode.updateMany({
+      where: { transactionId: tx.id },
+      data: { status: "INVALID" },
+    });
 
-    if (tx.walletPaidYen > 0) {
-      await creditWalletRefund(db, {
-        buyerId: tx.buyerId,
-        amountYen: tx.walletPaidYen,
-        transactionId: tx.id,
-        description: "開示期限切れによる残高返金",
-      });
-    }
+    await creditSaleToWallet(db, {
+      sellerId: tx.sellerId,
+      amountYen: tx.sellerPayoutYen,
+      transactionId: tx.id,
+    });
 
     await db.transaction.update({
       where: { id: tx.id },
       data: {
-        status: "EXPIRED",
-        escrowStatus: "REFUNDED",
-        stripeRefundId: refundId,
+        status: "COMPLETED",
+        escrowStatus: "RELEASED",
+        autoCompletedAt: now,
+        payoutReleasedAt: now,
       },
+    });
+
+    await db.user.update({
+      where: { id: tx.sellerId },
+      data: { completedSales: { increment: 1 } },
+    });
+    await db.user.update({
+      where: { id: tx.buyerId },
+      data: { completedBuys: { increment: 1 } },
     });
 
     await db.auditLog.create({
       data: {
         actorUserId: opts?.actorUserId ?? null,
-        action: "TRANSACTION_REVEAL_EXPIRED",
+        action: "TRANSACTION_REVEAL_FORFEITED",
         entityType: "Transaction",
         entityId: tx.id,
         metadata: {
           reason: "reveal_expired",
-          refundId,
-          restoredCodes: codes.length,
+          sellerPayoutYen: tx.sellerPayoutYen,
+          noRefund: true,
         },
       },
     });
@@ -126,10 +103,10 @@ export async function cancelUnrevealedTransaction(
   await createUserMessage({
     userId: tx.buyerId,
     kind: "REVEAL_EXPIRED",
-    title: "開示期限が切れてキャンセルされたよ",
+    title: "開示期限が切れて取引完了したよ",
     body: [
-      `「${tx.item.title}」は購入から${holdH}時間以内に開示されなかったため、自動キャンセル・返金したよ。`,
-      "開示期限切れのため、購入者評価に★1が記録されたよ。",
+      `「${tx.item.title}」は購入から${holdH}時間以内に開示されなかったため、取引完了になったよ。`,
+      "返金はされないよ。購入者評価に★1が記録されたよ。",
     ].join("\n"),
     linkHref: "/me",
     linkLabel: "マイページを見る",
@@ -140,10 +117,10 @@ export async function cancelUnrevealedTransaction(
   await createUserMessage({
     userId: tx.sellerId,
     kind: "REVEAL_EXPIRED_SELLER",
-    title: "未開示のまま期限切れになったよ",
+    title: "未開示のまま期限切れ → 売上確定",
     body: [
       `「${tx.item.title}」は購入者が開示せず期限切れになったよ。`,
-      "在庫は戻してあるよ。購入者には評価★1が付いたよ。",
+      "売上はウォレットに反映済み。購入者には評価★1が付いたよ。",
     ].join("\n"),
     linkHref: "/me",
     linkLabel: "マイページを見る",
@@ -153,14 +130,22 @@ export async function cancelUnrevealedTransaction(
 
   return {
     transactionId: tx.id,
-    alreadyCancelled: false as const,
-    status: "EXPIRED" as const,
-    refundId,
+    alreadySettled: false as const,
+    status: "COMPLETED" as const,
+    creditedYen: tx.sellerPayoutYen,
     penaltyApplied: true,
   };
 }
 
-/** Cron: 開示期限切れの PAID_ESCROW を強制キャンセル */
+/** @deprecated 名称互換 */
+export async function cancelUnrevealedTransaction(
+  transactionId: string,
+  opts?: { actorUserId?: string | null },
+) {
+  return forfeitUnrevealedTransaction(transactionId, opts);
+}
+
+/** Cron: 開示期限切れの PAID_ESCROW を売上確定＋購入者評価1 */
 export async function expireUnrevealedTransactions() {
   const now = new Date();
   const holdH = revealHoldHours();
@@ -182,7 +167,7 @@ export async function expireUnrevealedTransactions() {
   const results = [];
   for (const row of rows) {
     try {
-      const r = await cancelUnrevealedTransaction(row.id);
+      const r = await forfeitUnrevealedTransaction(row.id);
       results.push(r);
     } catch (e) {
       console.error("expireUnrevealed failed", row.id, e);

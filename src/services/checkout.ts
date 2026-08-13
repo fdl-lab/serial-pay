@@ -526,13 +526,13 @@ export async function revealCodesForBuyer(buyerId: string, transactionId: string
       tx.revealDeadlineAt ??
       new Date(tx.createdAt.getTime() + holdH * 60 * 60_000);
     if (revealBy.getTime() <= Date.now()) {
-      const { cancelUnrevealedTransaction } = await import(
+      const { forfeitUnrevealedTransaction } = await import(
         "@/services/reveal-cancel"
       );
-      await cancelUnrevealedTransaction(tx.id, { actorUserId: buyerId });
+      await forfeitUnrevealedTransaction(tx.id, { actorUserId: buyerId });
       throw new ApiError(
         409,
-        `開示期限（購入から${holdH}時間）が切れたよ。自動キャンセル・返金したよ`,
+        `開示期限（購入から${holdH}時間）が切れたよ。返金なしで取引完了・評価★1になったよ`,
         "REVEAL_EXPIRED",
       );
     }

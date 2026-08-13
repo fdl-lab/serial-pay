@@ -24,7 +24,7 @@ export async function recalcUserRating(rateeId: string) {
 }
 
 /**
- * 開示期限切れの強制キャンセル時: 出品者→購入者の評価1を付与
+ * 開示期限切れ（未開示のまま完了）時: 出品者→購入者の評価1を付与
  */
 export async function applyRevealExpiredBuyerPenalty(params: {
   transactionId: string;
@@ -47,7 +47,7 @@ export async function applyRevealExpiredBuyerPenalty(params: {
       raterId: params.sellerId,
       rateeId: params.buyerId,
       score: 1,
-      comment: "開示期限切れによる自動キャンセル",
+      comment: "開示期限切れ（未開示のまま取引完了）",
     },
   });
   await recalcUserRating(params.buyerId);

@@ -281,7 +281,7 @@ export function CodeRevealScreen({
                 hour: "2-digit",
                 minute: "2-digit",
               })}
-              まで（購入後のキャンセルは不可。過ぎると自動キャンセル・評価★1）
+              まで（キャンセル不可。過ぎると返金なしで完了・評価★1）
             </p>
           )}
           <p>

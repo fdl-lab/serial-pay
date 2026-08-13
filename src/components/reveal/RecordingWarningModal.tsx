@@ -31,7 +31,7 @@ export function RecordingWarningModal({
         <p className="mt-3 rounded-xl bg-mint/15 px-3 py-2 text-sm font-semibold leading-relaxed text-mint-deep">
           確認タイマー（{windowMinutes}分）は、下の「コードを表示する」を押した瞬間から始まるよ。
           この注釈を読んでるあいだはまだ始まらないから安心してね。
-          購入後のキャンセルはできないよ。開示前の保留は購入から72時間まで（過ぎると自動キャンセル・返金、評価★1）。
+          購入後のキャンセルはできないよ。開示前の保留は購入から72時間まで（過ぎると返金なしで取引完了、評価★1）。
         </p>
         <p className="mt-3 text-sm leading-relaxed text-ink-soft">
           「使えなかった」として異議申し立てする場合、

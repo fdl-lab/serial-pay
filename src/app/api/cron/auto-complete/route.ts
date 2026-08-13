@@ -7,7 +7,7 @@ export const maxDuration = 60;
 
 /**
  * Vercel Cron: 毎時
- * - 開示期限切れ → キャンセル返金 + 購入者評価1
+ * - 開示期限切れ（未開示）→ 返金なしで売上確定 + 購入者評価1
  * - 確認期限切れ → 自動完了
  */
 export async function GET(req: Request) {
@@ -19,12 +19,12 @@ export async function GET(req: Request) {
     }
   }
 
-  const expiredUnrevealed = await expireUnrevealedTransactions();
+  const forfeitedUnrevealed = await expireUnrevealedTransactions();
   const autoCompleted = await autoCompleteExpired();
 
   return NextResponse.json({
     ok: true,
-    expiredUnrevealed: expiredUnrevealed.length,
+    forfeitedUnrevealed: forfeitedUnrevealed.length,
     autoCompleted: autoCompleted.length,
   });
 }

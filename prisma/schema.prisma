@@ -402,7 +402,7 @@ model Transaction {
   stripeRefundId        String?
 
   codeRevealedAt         DateTime?
-  /** 開示前の保留期限（購入/履行時点）。過ぎると自動キャンセル */
+  /** 開示前の保留期限（購入/履行時点）。過ぎると返金なしで売上確定＋購入者★1 */
   revealDeadlineAt       DateTime?
   confirmationDeadlineAt DateTime?
   buyerConfirmedAt       DateTime?

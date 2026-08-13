@@ -79,7 +79,7 @@ export function PendingPurchasesCard() {
       <div>
         <h2 className="text-lg font-bold">開示前・確認中のシリアル</h2>
         <p className="mt-1 text-sm text-ink-soft">
-          購入後のキャンセルはできないよ。開示は購入から72時間まで保留できるけど、過ぎると自動キャンセル・返金（評価★1）になるよ
+          購入後のキャンセルはできないよ。開示は72時間まで保留できるけど、過ぎると返金なしで取引完了・評価★1になるよ
         </p>
       </div>
 
