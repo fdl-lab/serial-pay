@@ -31,6 +31,16 @@ export function jsonError(error: unknown) {
     );
   }
   console.error(error);
+  if (isDbPoolExhausted(error)) {
+    return NextResponse.json(
+      {
+        error:
+          "ただいま混み合っています。しばらくしてからもう一度お試しください",
+        code: "DB_POOL_EXHAUSTED",
+      },
+      { status: 503 },
+    );
+  }
   return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
 }
 
@@ -79,7 +89,18 @@ function isDbUnavailable(e: unknown): boolean {
   return (
     msg.includes("Can't reach database") ||
     msg.includes("P1001") ||
-    msg.includes("PrismaClientInitializationError")
+    msg.includes("PrismaClientInitializationError") ||
+    msg.includes("EMAXCONNSESSION") ||
+    msg.includes("max clients reached")
+  );
+}
+
+function isDbPoolExhausted(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : String(e);
+  return (
+    msg.includes("EMAXCONNSESSION") ||
+    msg.includes("max clients reached") ||
+    msg.includes("too many clients")
   );
 }
 
