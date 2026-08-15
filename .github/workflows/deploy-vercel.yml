@@ -18,26 +18,18 @@ jobs:
       - name: Install Vercel CLI
         run: npm install --global vercel@39.4.2
 
-      - name: Check secrets
+      - name: Verify Vercel auth
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
+          set -e
           if [ -z "$VERCEL_TOKEN" ]; then echo "VERCEL_TOKEN missing"; exit 1; fi
           if [ -z "$VERCEL_ORG_ID" ]; then echo "VERCEL_ORG_ID missing"; exit 1; fi
           if [ -z "$VERCEL_PROJECT_ID" ]; then echo "VERCEL_PROJECT_ID missing"; exit 1; fi
-          echo "secrets present"
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          echo "org=${VERCEL_ORG_ID:0:8}... project=${VERCEL_PROJECT_ID:0:8}..."
+          vercel whoami --token="$VERCEL_TOKEN"
 
-      - name: Pull Vercel Environment Information
-        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+      - name: Deploy to Production
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-
-      - name: Build Project Artifacts
-        run: vercel build --prod --token="$VERCEL_TOKEN"
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-
-      - name: Deploy Project Artifacts to Vercel
-        run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel deploy --prod --yes --token="$VERCEL_TOKEN"
