@@ -77,7 +77,7 @@ export function MessagesCard() {
         <div>
           <h2 className="text-lg font-bold">メッセージ</h2>
           <p className="mt-1 text-sm text-ink-soft">
-            異議の審査結果などはここに届くよ
+            異議の審査結果などはこちらに届きます
             {unreadCount > 0 ? ` · 未読 ${unreadCount}` : ""}
           </p>
         </div>
