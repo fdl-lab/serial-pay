@@ -1,0 +1,26 @@
+name: Hourly auto-complete cron
+
+# Hobby の Vercel Cron は1日1回までなので、こちらで毎時叩く
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call auto-complete endpoint
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_URL: ${{ secrets.APP_URL }}
+        run: |
+          set -e
+          URL="${APP_URL:-https://serial-pay.vercel.app}/api/cron/auto-complete"
+          if [ -n "$CRON_SECRET" ]; then
+            curl -fsS -H "Authorization: Bearer ${CRON_SECRET}" "$URL"
+          else
+            echo "CRON_SECRET 未設定のため認証なしで呼びます（エンドポイント側で CRON_SECRET 未設定なら通る）"
+            curl -fsS "$URL"
+          fi
+          echo

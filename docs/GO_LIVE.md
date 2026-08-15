@@ -88,7 +88,7 @@ Production でこれにする:
 |------|------|
 | 画録ストレージ | R2/S3 のバケット + `S3_*` を Vercel に設定（異議動画） |
 | 事務局 | `ADMIN_API_SECRET` を長いランダム文字列で設定 |
-| Cron | `vercel.json` で毎時 `/api/cron/auto-complete`（未開示72h→売上確定＋★1 / 確認期限→自動完了）。`CRON_SECRET` 推奨 |
+| Cron | Hobby は1日1回まで → `vercel.json` は毎日 15:00 UTC。毎時は GitHub Actions `Hourly auto-complete cron`（`CRON_SECRET` / 任意で `APP_URL`）。Pro なら Vercel Cron を毎時に戻せる |
 | 独自ドメイン | あるなら DNS → Vercel → LINE/Stripe のURLも更新 |
 | 法務ページ | 利用規約・プライバシー・特商法 |
 
