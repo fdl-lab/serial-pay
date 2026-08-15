@@ -1,34 +1,51 @@
-/* Serial Pay — minimal offline shell */
-const CACHE = "serial-pay-v1";
-const PRECACHE = ["/", "/manifest.webmanifest"];
+/* Serial Pay — network-first; avoid sticking to stale HTML */
+const CACHE = "serial-pay-v2";
+const PRECACHE = ["/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(PRECACHE)).then(() => self.skipWaiting()),
+    caches
+      .open(CACHE)
+      .then((cache) => cache.addAll(PRECACHE))
+      .then(() => self.skipWaiting()),
   );
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))),
-    ).then(() => self.clients.claim()),
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))),
+      )
+      .then(() => self.clients.claim()),
   );
 });
 
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
-  // API はキャッシュしない
-  if (new URL(request.url).pathname.startsWith("/api/")) return;
+
+  const url = new URL(request.url);
+  // API / RSC / HTML はキャッシュしない（文言デプロイが端末に残るのを防ぐ）
+  if (
+    url.pathname.startsWith("/api/") ||
+    request.mode === "navigate" ||
+    request.headers.get("RSC") === "1" ||
+    request.destination === "document"
+  ) {
+    return;
+  }
 
   event.respondWith(
     fetch(request)
       .then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE).then((cache) => cache.put(request, copy));
+        if (res.ok && url.pathname.startsWith("/_next/static/")) {
+          const copy = res.clone();
+          caches.open(CACHE).then((cache) => cache.put(request, copy));
+        }
         return res;
       })
-      .catch(() => caches.match(request).then((r) => r || caches.match("/"))),
+      .catch(() => caches.match(request)),
   );
 });
