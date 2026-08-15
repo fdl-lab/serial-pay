@@ -8,6 +8,7 @@ import { PendingPurchasesCard } from "@/components/wallet/PendingPurchasesCard";
 import { MessagesCard } from "@/components/wallet/MessagesCard";
 import { ProfileCard } from "@/components/wallet/ProfileCard";
 import { PendingRatingsCard } from "@/components/wallet/PendingRatingsCard";
+import { SellerListingsCard } from "@/components/wallet/SellerListingsCard";
 import { formatYen } from "@/lib/format";
 import { apiFetch } from "@/lib/auth/fetch";
 
@@ -115,6 +116,8 @@ function MyPageInner() {
       )}
 
       <MessagesCard />
+
+      <SellerListingsCard />
 
       <PendingRatingsCard />
 
