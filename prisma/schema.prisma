@@ -386,7 +386,7 @@ model Transaction {
   platformFeeYen     Int
   platformFeePercent Int @default(10)
   amountChargedYen   Int
-  sellerPayoutYen    Int // 手数料10%差引後 → ウォレット加算額
+  sellerPayoutYen    Int // 販売手数料差引後 → ウォレット加算額
 
   // 支払い内訳（残高再利用対応）
   paymentMethod   PaymentMethod @default(STRIPE)

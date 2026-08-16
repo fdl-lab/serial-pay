@@ -18,8 +18,8 @@ export function getStripe(): Stripe {
 }
 
 export function platformFeePercent(): number {
-  const raw = Number(process.env.STRIPE_PLATFORM_FEE_PERCENT ?? "10");
-  if (!Number.isFinite(raw) || raw < 0 || raw > 100) return 10;
+  const raw = Number(process.env.STRIPE_PLATFORM_FEE_PERCENT ?? "15");
+  if (!Number.isFinite(raw) || raw < 0 || raw > 100) return 15;
   return raw;
 }
 
