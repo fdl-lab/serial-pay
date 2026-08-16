@@ -134,59 +134,42 @@ export async function getMarketHint(eventName?: string) {
   });
 }
 
-export async function listPublicItems(params?: { take?: number; q?: string }) {
-  const take = Math.min(params?.take ?? 50, 100);
-  const q = params?.q?.trim();
-
-  const rows = await prisma.item.findMany({
-    where: {
-      status: "ACTIVE",
-      stockAvailable: { gt: 0 },
-      ...(q
-        ? {
-            OR: [
-              { title: { contains: q, mode: "insensitive" } },
-              { artistName: { contains: q, mode: "insensitive" } },
-              { eventName: { contains: q, mode: "insensitive" } },
-              { category: { contains: q, mode: "insensitive" } },
-              { description: { contains: q, mode: "insensitive" } },
-              { seller: { displayName: { contains: q, mode: "insensitive" } } },
-            ],
-          }
-        : {}),
-    },
-    orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
-    take,
+const publicItemSelect = {
+  id: true,
+  title: true,
+  artistName: true,
+  eventName: true,
+  category: true,
+  listingType: true,
+  unitPriceYen: true,
+  stockAvailable: true,
+  setQuantity: true,
+  bulkDiscountEnabled: true,
+  bulkDiscountMinQty: true,
+  bulkDiscountPercent: true,
+  suggestedAvgPriceYen: true,
+  publishedAt: true,
+  seller: {
     select: {
       id: true,
-      title: true,
-      artistName: true,
-      eventName: true,
-      category: true,
-      listingType: true,
-      unitPriceYen: true,
-      stockAvailable: true,
-      setQuantity: true,
-      bulkDiscountEnabled: true,
-      bulkDiscountMinQty: true,
-      bulkDiscountPercent: true,
-      suggestedAvgPriceYen: true,
-      publishedAt: true,
-      seller: {
-        select: {
-          id: true,
-          publicId: true,
-          displayName: true,
-          avatarUrl: true,
-          ratingScore: true,
-          ratingCount: true,
-        },
-      },
+      publicId: true,
+      displayName: true,
+      avatarUrl: true,
+      ratingScore: true,
+      ratingCount: true,
     },
-  });
+  },
+} as const;
 
+function mapPublicItems(
+  rows: Awaited<
+    ReturnType<
+      typeof prisma.item.findMany<{ select: typeof publicItemSelect }>
+    >
+  >,
+) {
   // Prisma Decimal などをプレーンな値に直し、RSC / JSON のシリアライズ事故を防ぐ
-  const mapped = rows.map((item) => ({
+  return rows.map((item) => ({
     id: item.id,
     title: item.title,
     artistName: item.artistName,
@@ -210,18 +193,60 @@ export async function listPublicItems(params?: { take?: number; q?: string }) {
       ratingCount: item.seller.ratingCount,
     },
   }));
+}
 
-  // 0円お試しを一覧の先頭に
-  mapped.sort((a, b) => {
-    const at = isTrialListing(a) ? 0 : 1;
-    const bt = isTrialListing(b) ? 0 : 1;
-    if (at !== bt) return at - bt;
-    const ap = a.publishedAt?.getTime() ?? 0;
-    const bp = b.publishedAt?.getTime() ?? 0;
-    return bp - ap;
-  });
+export async function listPublicItems(params?: { take?: number; q?: string }) {
+  const take = Math.min(params?.take ?? 50, 100);
+  const q = params?.q?.trim();
 
-  return mapped;
+  // 検索時はお試し（0円）を除外
+  if (q) {
+    const rows = await prisma.item.findMany({
+      where: {
+        status: "ACTIVE",
+        stockAvailable: { gt: 0 },
+        unitPriceYen: { gt: 0 },
+        OR: [
+          { title: { contains: q, mode: "insensitive" } },
+          { artistName: { contains: q, mode: "insensitive" } },
+          { eventName: { contains: q, mode: "insensitive" } },
+          { category: { contains: q, mode: "insensitive" } },
+          { description: { contains: q, mode: "insensitive" } },
+          { seller: { displayName: { contains: q, mode: "insensitive" } } },
+        ],
+      },
+      orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
+      take,
+      select: publicItemSelect,
+    });
+    return mapPublicItems(rows);
+  }
+
+  // 通常一覧: お試しを先頭にピン留め（take 外に押し出されないよう別取得）
+  const [trialRows, rows] = await Promise.all([
+    prisma.item.findMany({
+      where: {
+        status: "ACTIVE",
+        stockAvailable: { gt: 0 },
+        unitPriceYen: 0,
+      },
+      orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
+      take: 5,
+      select: publicItemSelect,
+    }),
+    prisma.item.findMany({
+      where: {
+        status: "ACTIVE",
+        stockAvailable: { gt: 0 },
+        unitPriceYen: { gt: 0 },
+      },
+      orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
+      take,
+      select: publicItemSelect,
+    }),
+  ]);
+
+  return [...mapPublicItems(trialRows), ...mapPublicItems(rows)];
 }
 
 export async function getPublicItem(id: string) {
