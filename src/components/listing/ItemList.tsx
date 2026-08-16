@@ -72,10 +72,17 @@ export function ItemList({
             : `在庫 ${item.stockAvailable}枚 · バラ可`;
 
         return (
-          <li key={item.id}>
+          <li
+            key={item.id}
+            className={trial ? "bg-mint/15" : undefined}
+          >
             <Link
               href={`/items/${item.id}`}
-              className="flex min-h-[88px] items-stretch gap-3 px-3 py-3.5 transition active:bg-mint/10 sm:gap-4 sm:px-5 sm:py-4"
+              className={`flex min-h-[88px] items-stretch gap-3 px-3 py-3.5 transition sm:gap-4 sm:px-5 sm:py-4 ${
+                trial
+                  ? "active:bg-mint/25"
+                  : "active:bg-mint/10"
+              }`}
             >
               {/* 出品者アバター */}
               <div
