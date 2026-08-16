@@ -43,7 +43,7 @@ export function WalletBalanceCard({
   return (
     <section className="card-surface overflow-hidden bg-gradient-to-br from-white via-white to-mint/10">
       <p className="brand-mark">売上金ウォレット</p>
-      <p className="text-sm text-ink-soft">取引完了後の売上（手数料15%差引後）</p>
+      <p className="text-sm text-ink-soft">取引完了後の売上（手数料13%差引後）</p>
       <p className="mt-3 font-mono text-4xl font-semibold tracking-tight">
         {formatYen(balanceYen)}
       </p>
