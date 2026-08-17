@@ -15,9 +15,17 @@ type Message = {
   unread: boolean;
 };
 
-export function MessagesCard() {
-  const [messages, setMessages] = useState<Message[] | null>(null);
-  const [unreadCount, setUnreadCount] = useState(0);
+export function MessagesCard({
+  initialMessages,
+  initialUnreadCount,
+}: {
+  initialMessages?: Message[] | null;
+  initialUnreadCount?: number;
+}) {
+  const [messages, setMessages] = useState<Message[] | null>(
+    initialMessages ?? null,
+  );
+  const [unreadCount, setUnreadCount] = useState(initialUnreadCount ?? 0);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -40,8 +48,9 @@ export function MessagesCard() {
   }, []);
 
   useEffect(() => {
+    if (initialMessages) return;
     void load();
-  }, [load]);
+  }, [initialMessages, load]);
 
   async function markRead(id: string) {
     await apiFetch(`/api/messages/${id}/read`, { method: "POST" });

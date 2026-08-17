@@ -14,14 +14,18 @@ const EKYC_LABEL: Record<string, string> = {
   REJECTED: "却下",
 };
 
-export function ProfileCard() {
-  const [user, setUser] = useState<VerificationStatus | null>(null);
-  const [displayName, setDisplayName] = useState("");
+export function ProfileCard({
+  initialUser = null,
+}: {
+  initialUser?: VerificationStatus | null;
+}) {
+  const [user, setUser] = useState<VerificationStatus | null>(initialUser);
+  const [displayName, setDisplayName] = useState(initialUser?.displayName ?? "");
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialUser);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -42,8 +46,9 @@ export function ProfileCard() {
   }, []);
 
   useEffect(() => {
+    if (initialUser) return;
     void load();
-  }, [load]);
+  }, [initialUser, load]);
 
   async function saveName() {
     setBusy(true);

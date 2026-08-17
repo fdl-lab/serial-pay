@@ -13,16 +13,18 @@ export async function ensureWallet(userId: string, db: Prisma.TransactionClient 
 
 export async function getWalletSummary(userId: string) {
   const wallet = await ensureWallet(userId);
-  const recent = await prisma.walletLedger.findMany({
-    where: { walletId: wallet.id },
-    orderBy: { createdAt: "desc" },
-    take: 20,
-  });
-  const payouts = await prisma.payoutRequest.findMany({
-    where: { userId },
-    orderBy: { createdAt: "desc" },
-    take: 10,
-  });
+  const [recent, payouts] = await Promise.all([
+    prisma.walletLedger.findMany({
+      where: { walletId: wallet.id },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+    }),
+    prisma.payoutRequest.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    }),
+  ]);
   return { wallet, recent, payouts, payoutFeeYen: PAYOUT_FEE_YEN };
 }
 

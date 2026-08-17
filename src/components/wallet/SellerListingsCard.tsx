@@ -25,8 +25,12 @@ const statusLabel: Record<string, string> = {
   SOLD_OUT: "売り切れ",
 };
 
-export function SellerListingsCard() {
-  const [items, setItems] = useState<ListingRow[] | null>(null);
+export function SellerListingsCard({
+  initialItems,
+}: {
+  initialItems?: ListingRow[] | null;
+}) {
+  const [items, setItems] = useState<ListingRow[] | null>(initialItems ?? null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -49,8 +53,9 @@ export function SellerListingsCard() {
   }, []);
 
   useEffect(() => {
+    if (initialItems) return;
     void load();
-  }, [load]);
+  }, [initialItems, load]);
 
   async function archive(id: string, title: string) {
     if (

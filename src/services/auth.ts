@@ -129,19 +129,35 @@ export async function syncSupabaseUser(supabaseUser: SupabaseUser): Promise<User
   });
 
   if (existing) {
-    const user = await prisma.user.update({
+    const nextPhone = phoneE164 ?? existing.phoneE164;
+    const nextVerified = loginVerified || existing.phoneVerified;
+    const nextEmail = supabaseUser.email ?? existing.email;
+    const nextDisplay = existing.displayName || displayName;
+    const nextAvatar = existing.avatarUrl || avatarUrl;
+    const needsPublicId = !existing.publicId;
+    const unchanged =
+      !needsPublicId &&
+      existing.phoneE164 === nextPhone &&
+      existing.phoneVerified === nextVerified &&
+      existing.email === nextEmail &&
+      existing.displayName === nextDisplay &&
+      existing.avatarUrl === nextAvatar &&
+      existing.authProvider === authProvider;
+
+    if (unchanged) return existing;
+
+    return prisma.user.update({
       where: { id: existing.id },
       data: {
-        phoneE164: phoneE164 ?? existing.phoneE164,
-        phoneVerified: loginVerified || existing.phoneVerified,
-        email: supabaseUser.email ?? existing.email,
-        displayName: existing.displayName || displayName,
-        avatarUrl: existing.avatarUrl || avatarUrl,
+        phoneE164: nextPhone,
+        phoneVerified: nextVerified,
+        email: nextEmail,
+        displayName: nextDisplay,
+        avatarUrl: nextAvatar,
         authProvider,
         publicId: existing.publicId || (await allocatePublicId()),
       },
     });
-    return user;
   }
 
   if (phoneE164) {

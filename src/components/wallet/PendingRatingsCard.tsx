@@ -15,8 +15,14 @@ type Pending = {
   };
 };
 
-export function PendingRatingsCard() {
-  const [pending, setPending] = useState<Pending[] | null>(null);
+export function PendingRatingsCard({
+  initialPending,
+}: {
+  initialPending?: Pending[] | null;
+}) {
+  const [pending, setPending] = useState<Pending[] | null>(
+    initialPending ?? null,
+  );
   const [activeId, setActiveId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,8 +45,9 @@ export function PendingRatingsCard() {
   }, []);
 
   useEffect(() => {
+    if (initialPending) return;
     void load();
-  }, [load]);
+  }, [initialPending, load]);
 
   if (error) return <p className="banner-error">{error}</p>;
   if (!pending) {

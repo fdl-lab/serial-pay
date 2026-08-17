@@ -33,8 +33,14 @@ function formatDeadline(iso: string | null) {
   });
 }
 
-export function PendingPurchasesCard() {
-  const [purchases, setPurchases] = useState<Purchase[] | null>(null);
+export function PendingPurchasesCard({
+  initialPurchases,
+}: {
+  initialPurchases?: Purchase[] | null;
+}) {
+  const [purchases, setPurchases] = useState<Purchase[] | null>(
+    initialPurchases ?? null,
+  );
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -56,8 +62,9 @@ export function PendingPurchasesCard() {
   }, []);
 
   useEffect(() => {
+    if (initialPurchases) return;
     void load();
-  }, [load]);
+  }, [initialPurchases, load]);
 
   if (error) {
     return <p className="banner-error">{error}</p>;
