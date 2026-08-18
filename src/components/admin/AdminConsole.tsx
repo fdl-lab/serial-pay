@@ -6,6 +6,20 @@ import { formatYen } from "@/lib/format";
 
 const SECRET_KEY = "sp_admin_secret";
 
+function normalizeAdminSecret(raw: string) {
+  let s = raw.trim();
+  // 行ごと貼った場合のプレフィックス除去
+  s = s.replace(/^ADMIN_API_SECRET\s*=\s*/i, "");
+  // 引用符付きでコピーした場合
+  if (
+    (s.startsWith('"') && s.endsWith('"')) ||
+    (s.startsWith("'") && s.endsWith("'"))
+  ) {
+    s = s.slice(1, -1);
+  }
+  return s.trim();
+}
+
 type DisputeRow = {
   id: string;
   status: string;
@@ -87,13 +101,23 @@ export function AdminConsole() {
   async function unlock(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    const cleaned = normalizeAdminSecret(secret);
+    if (!cleaned) {
+      setError("シークレットが空です");
+      return;
+    }
     try {
-      await load(secret.trim());
-      window.sessionStorage.setItem(SECRET_KEY, secret.trim());
-      setSecret(secret.trim());
+      await load(cleaned);
+      window.sessionStorage.setItem(SECRET_KEY, cleaned);
+      setSecret(cleaned);
       setUnlocked(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "認証に失敗しました");
+      const msg = err instanceof Error ? err.message : "認証に失敗しました";
+      setError(
+        msg.includes("管理者のみ")
+          ? `シークレットが一致しません（入力 ${cleaned.length} 文字）。.env.local の ADMIN_API_SECRET の「=」より後ろだけをコピーしてください。.env と値が違う場合は .env.local 側を使ってください。`
+          : msg,
+      );
     }
   }
 
@@ -168,16 +192,15 @@ export function AdminConsole() {
               placeholder="ここにシークレットを貼り付け"
             />
           </label>
-          {error && (
-            <p className="banner-error">
-              {error.includes("管理者のみ")
-                ? "シークレットが一致しません。.env.local の ADMIN_API_SECRET をそのままコピーして貼り付けてください。"
-                : error}
-            </p>
-          )}
+          {error && <p className="banner-error">{error}</p>}
           <button type="submit" className="btn btn-primary btn-block">
             入室する
           </button>
+          <p className="text-xs text-ink-soft">
+            正しい値は 43 文字です（
+            <code className="rounded bg-ink/5 px-1 font-mono">mz1…a7U</code>
+            ）。.env ではなく <strong>.env.local</strong> を見てください。
+          </p>
         </form>
         <p className="text-center text-sm">
           <Link href="/" className="font-semibold text-mint-deep underline">
