@@ -1,8 +1,8 @@
+# 本番デプロイは通常 `npx vercel deploy --prod`（または Vercel Dashboard）で行う。
+# GitHub Actions 自動デプロイはトークン不整合で失敗しやすいため、手動実行のみ。
 name: Deploy to Vercel
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 env:
@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Vercel CLI
-        run: npm install --global vercel@39.4.2
+        run: npm install --global vercel@latest
 
       - name: Verify Vercel auth
         env:
