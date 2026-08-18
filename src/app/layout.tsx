@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { MobileNav } from "@/components/layout/MobileNav";
+import { SiteFooter } from "@/components/layout/SiteFooter";
 
 export const metadata: Metadata = {
   title: "シリアルPay",
@@ -30,7 +31,10 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <body>
-        <div className="shell">{children}</div>
+        <div className="shell">
+          {children}
+          <SiteFooter />
+        </div>
         <MobileNav />
         <script
           dangerouslySetInnerHTML={{
