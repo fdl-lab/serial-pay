@@ -114,9 +114,7 @@ export function AdminConsole() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "認証に失敗しました";
       setError(
-        msg.includes("管理者のみ")
-          ? `シークレットが一致しません（入力 ${cleaned.length} 文字）。.env.local の ADMIN_API_SECRET の「=」より後ろだけをコピーしてください。.env と値が違う場合は .env.local 側を使ってください。`
-          : msg,
+        msg.includes("管理者のみ") ? "パスワードが違います" : msg,
       );
     }
   }
@@ -169,38 +167,21 @@ export function AdminConsole() {
           </p>
         </header>
         <form className="card-surface space-y-3" onSubmit={unlock}>
-          <p className="text-sm leading-relaxed text-ink-soft">
-            LINEログインではなく、環境変数
-            <code className="mx-1 rounded bg-ink/5 px-1.5 py-0.5 font-mono text-xs">
-              ADMIN_API_SECRET
-            </code>
-            の値を貼り付けてください（ローカルの
-            <code className="mx-1 rounded bg-ink/5 px-1.5 py-0.5 font-mono text-xs">
-              .env.local
-            </code>
-            と同じです）。
-          </p>
           <label className="field">
-            <span>ADMIN_API_SECRET</span>
+            <span>パスワード</span>
             <input
               type="password"
-              autoComplete="off"
+              autoComplete="current-password"
               spellCheck={false}
               required
               value={secret}
               onChange={(e) => setSecret(e.target.value)}
-              placeholder="ここにシークレットを貼り付け"
             />
           </label>
           {error && <p className="banner-error">{error}</p>}
           <button type="submit" className="btn btn-primary btn-block">
             入室する
           </button>
-          <p className="text-xs text-ink-soft">
-            正しい値は 43 文字です（
-            <code className="rounded bg-ink/5 px-1 font-mono">mz1…a7U</code>
-            ）。.env ではなく <strong>.env.local</strong> を見てください。
-          </p>
         </form>
         <p className="text-center text-sm">
           <Link href="/" className="font-semibold text-mint-deep underline">
