@@ -145,18 +145,36 @@ export function AdminConsole() {
           </p>
         </header>
         <form className="card-surface space-y-3" onSubmit={unlock}>
+          <p className="text-sm leading-relaxed text-ink-soft">
+            LINEログインではなく、環境変数
+            <code className="mx-1 rounded bg-ink/5 px-1.5 py-0.5 font-mono text-xs">
+              ADMIN_API_SECRET
+            </code>
+            の値を貼り付けてください（ローカルの
+            <code className="mx-1 rounded bg-ink/5 px-1.5 py-0.5 font-mono text-xs">
+              .env.local
+            </code>
+            と同じです）。
+          </p>
           <label className="field">
-            <span>管理者シークレット</span>
+            <span>ADMIN_API_SECRET</span>
             <input
               type="password"
-              autoComplete="current-password"
+              autoComplete="off"
+              spellCheck={false}
               required
               value={secret}
               onChange={(e) => setSecret(e.target.value)}
-              placeholder="ADMIN_API_SECRET"
+              placeholder="ここにシークレットを貼り付け"
             />
           </label>
-          {error && <p className="banner-error">{error}</p>}
+          {error && (
+            <p className="banner-error">
+              {error.includes("管理者のみ")
+                ? "シークレットが一致しません。.env.local の ADMIN_API_SECRET をそのままコピーして貼り付けてください。"
+                : error}
+            </p>
+          )}
           <button type="submit" className="btn btn-primary btn-block">
             入室する
           </button>
