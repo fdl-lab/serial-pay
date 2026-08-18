@@ -42,7 +42,16 @@ export default function TokushohoPage() {
       <section className="card-surface">
         <dl>
           <Row label="販売業者">FDL合同会社</Row>
-          <Row label="運営責任者">鈴木友里佳</Row>
+          <Row label="運営責任者">
+            請求があった場合に遅滞なく開示いたします。ご希望の方は
+            <Link
+              href="/contact"
+              className="font-semibold text-mint-deep underline"
+            >
+              お問い合わせフォーム
+            </Link>
+            よりご請求ください。
+          </Row>
           <Row label="所在地">
             〒107-0061
             <br />
@@ -58,7 +67,14 @@ export default function TokushohoPage() {
             </a>
             <br />
             <span className="text-xs">
-              ※電話番号はご請求いただいた場合に遅滞なく開示いたします。
+              ※電話番号はご請求いただいた場合に遅滞なく開示いたします。ご希望の方は
+              <Link
+                href="/contact"
+                className="font-semibold text-mint-deep underline"
+              >
+                お問い合わせフォーム
+              </Link>
+              よりご請求ください。
             </span>
           </Row>
           <Row label="販売価格">

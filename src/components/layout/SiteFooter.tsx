@@ -5,6 +5,7 @@ const links = [
   { href: "/tokushoho", label: "特商法表記" },
   { href: "/terms", label: "利用規約" },
   { href: "/privacy", label: "プライバシーポリシー" },
+  { href: "/contact", label: "お問い合わせ" },
 ] as const;
 
 export function SiteFooter() {
