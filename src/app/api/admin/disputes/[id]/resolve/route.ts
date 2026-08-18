@@ -1,7 +1,9 @@
 import { ZodError } from "zod";
 import { z } from "zod";
-import { jsonOk, jsonError, requireUser, ApiError } from "@/lib/api";
+import { jsonOk, jsonError, ApiError } from "@/lib/api";
+import { assertAdmin } from "@/lib/admin";
 import { resolveDispute } from "@/services/dispute";
+import { markDisputeUnderReview } from "@/services/admin";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -10,21 +12,13 @@ const bodySchema = z.object({
   reviewerNote: z.string().max(2000).optional(),
 });
 
-function assertAdmin(req: Request) {
-  const secret = process.env.ADMIN_API_SECRET;
-  const header = req.headers.get("x-admin-secret");
-  if (secret && header === secret) return;
-  if (process.env.DEV_AUTH_BYPASS === "true") return;
-  throw new ApiError(403, "管理者のみ操作できます", "FORBIDDEN");
-}
-
-/** 事務局審査（ADMIN_API_SECRET または DEV_AUTH_BYPASS） */
+/** 事務局審査（x-admin-secret） */
 export async function POST(req: Request, ctx: Ctx) {
   try {
     assertAdmin(req);
-    await requireUser(req);
     const { id } = await ctx.params;
     const body = bodySchema.parse(await req.json());
+    await markDisputeUnderReview(id);
     const result = await resolveDispute(id, body.decision, body.reviewerNote);
     return jsonOk(result);
   } catch (e) {
