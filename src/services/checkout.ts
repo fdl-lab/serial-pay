@@ -5,7 +5,7 @@ import {
   revealHoldHours,
 } from "@/lib/stripe";
 import { calcPriceBreakdown } from "@/lib/money";
-import { ApiError, assertBuyerEligible } from "@/lib/api";
+import { ApiError, assertBuyerEligible, assertPhoneVerified } from "@/lib/api";
 import { decryptSerial, encryptSerial, hashSerial } from "@/lib/crypto/serial";
 import {
   debitWalletForPurchase,
@@ -15,6 +15,8 @@ import {
 import type { PaymentMethod, User } from "@prisma/client";
 import { z } from "zod";
 import { isTrialListing } from "@/lib/trial-listing";
+import { canSellOrBuyByExpiry } from "@/lib/serial-expiry";
+import { markExpiredListingsSoldOut } from "@/services/listing";
 
 const checkoutSchema = z.object({
   itemId: z.string().min(1),
@@ -24,10 +26,105 @@ const checkoutSchema = z.object({
 
 const RESERVE_MINUTES = 30;
 
+/** 決済途中で止めたときの在庫ロック時間（分） */
+export function checkoutReserveMinutes() {
+  return RESERVE_MINUTES;
+}
+
+/**
+ * 予約期限切れの PENDING_PAYMENT を在庫に戻す。
+ * Stripe PI が残っていればキャンセルする（後から決済成功するのを防ぐ）。
+ */
+export async function releaseExpiredPendingCheckouts(now = new Date()) {
+  const expiredCodes = await prisma.serialCode.findMany({
+    where: {
+      status: "RESERVED",
+      reservedUntil: { lte: now },
+      transactionId: { not: null },
+      transaction: { status: "PENDING_PAYMENT" },
+    },
+    select: { transactionId: true },
+    distinct: ["transactionId"],
+    take: 100,
+  });
+
+  // reservedUntil 未設定の古い予約も、作成から RESERVE_MINUTES 経過で解放
+  const cutoff = new Date(now.getTime() - RESERVE_MINUTES * 60_000);
+  const legacy = await prisma.transaction.findMany({
+    where: {
+      status: "PENDING_PAYMENT",
+      createdAt: { lte: cutoff },
+      serialCodes: {
+        some: { status: "RESERVED", reservedUntil: null },
+      },
+    },
+    select: { id: true },
+    take: 100,
+  });
+
+  const txIds = [
+    ...new Set([
+      ...expiredCodes.map((c) => c.transactionId!).filter(Boolean),
+      ...legacy.map((t) => t.id),
+    ]),
+  ];
+
+  const released: string[] = [];
+  for (const transactionId of txIds) {
+    const tx = await prisma.transaction.findUnique({
+      where: { id: transactionId },
+      select: {
+        id: true,
+        status: true,
+        stripePaymentIntentId: true,
+      },
+    });
+    if (!tx || tx.status !== "PENDING_PAYMENT") continue;
+
+    if (tx.stripePaymentIntentId) {
+      try {
+        const stripe = getStripe();
+        const pi = await stripe.paymentIntents.retrieve(tx.stripePaymentIntentId);
+        if (pi.status === "succeeded") {
+          await fulfillTransactionById(tx.id, {
+            stripePaymentIntentId: tx.stripePaymentIntentId,
+          });
+          continue;
+        }
+        if (
+          pi.status === "requires_payment_method" ||
+          pi.status === "requires_confirmation" ||
+          pi.status === "requires_action" ||
+          pi.status === "requires_capture"
+        ) {
+          await stripe.paymentIntents.cancel(tx.stripePaymentIntentId);
+        }
+      } catch (e) {
+        console.warn(
+          "releaseExpiredPendingCheckouts: PI cancel skipped",
+          tx.stripePaymentIntentId,
+          e,
+        );
+      }
+    }
+
+    const result = await releasePendingCheckout(
+      tx.id,
+      "reservation_expired",
+    );
+    if (result.released) released.push(tx.id);
+  }
+
+  return released;
+}
+
 export async function createCheckout(buyer: User, raw: unknown) {
-  assertBuyerEligible(buyer);
   const { itemId, quantity: qtyInput, useWalletYen: useWalletRaw } =
     checkoutSchema.parse(raw);
+
+  // 途中離脱の予約を先に解放してから在庫判定（再購入できるように）
+  await releaseExpiredPendingCheckouts();
+  await markExpiredListingsSoldOut();
 
   const item = await prisma.item.findUnique({
     where: { id: itemId },
@@ -37,19 +134,26 @@ export async function createCheckout(buyer: User, raw: unknown) {
   if (!item || item.status !== "ACTIVE") {
     throw new ApiError(404, "出品が見つかりません", "ITEM_NOT_FOUND");
   }
+  if (!canSellOrBuyByExpiry(item.serialExpiresAt)) {
+    throw new ApiError(
+      400,
+      "応募期限が近い、または過ぎているため購入できません",
+      "SERIAL_EXPIRED",
+    );
+  }
   if (item.sellerId === buyer.id) {
     throw new ApiError(400, "自分の出品は購入できません", "SELF_PURCHASE");
   }
 
   const trial = isTrialListing(item);
-
-  if (
-    !trial &&
-    (item.seller.stripeConnectStatus !== "ACTIVE" ||
-      !item.seller.stripeConnectAccountId)
-  ) {
-    throw new ApiError(400, "出品者の受取設定が未完了です", "SELLER_CONNECT");
+  // お試し（0円）は LINEログインのみ。通常購入は本人確認も必須。
+  if (trial) {
+    assertPhoneVerified(buyer);
+  } else {
+    assertBuyerEligible(buyer);
   }
+
+  // 出品者の銀行口座（Connect）は出金時に必要。購入・売上ウォレット反映は不要。
 
   // お試しは1枚固定（体験用）
   const quantity = trial
@@ -211,52 +315,140 @@ export async function createCheckout(buyer: User, raw: unknown) {
     };
   }
 
-  const stripe = getStripe();
-  let customerId = buyer.stripeCustomerId;
-  if (!customerId) {
-    const customer = await stripe.customers.create({
-      email: buyer.email,
-      metadata: { userId: buyer.id },
+  try {
+    const stripe = getStripe();
+    let customerId = buyer.stripeCustomerId;
+    if (customerId) {
+      try {
+        const existing = await stripe.customers.retrieve(customerId);
+        if (existing.deleted) {
+          customerId = null;
+        }
+      } catch {
+        // テスト鍵時代のIDなど、Liveに存在しない場合は作り直す
+        customerId = null;
+      }
+    }
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: buyer.email ?? undefined,
+        metadata: { userId: buyer.id },
+      });
+      customerId = customer.id;
+      await prisma.user.update({
+        where: { id: buyer.id },
+        data: { stripeCustomerId: customerId },
+      });
+    }
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: stripePaidYen,
+      currency: "jpy",
+      customer: customerId,
+      capture_method: "automatic",
+      transfer_group: result.id,
+      metadata: {
+        transactionId: result.id,
+        itemId: item.id,
+        buyerId: buyer.id,
+        sellerId: item.sellerId,
+        walletPaidYen: String(walletPaidYen),
+        stripePaidYen: String(stripePaidYen),
+      },
+      automatic_payment_methods: { enabled: true },
     });
-    customerId = customer.id;
-    await prisma.user.update({
-      where: { id: buyer.id },
-      data: { stripeCustomerId: customerId },
+
+    await prisma.transaction.update({
+      where: { id: result.id },
+      data: { stripePaymentIntentId: paymentIntent.id },
     });
+
+    return {
+      transactionId: result.id,
+      clientSecret: paymentIntent.client_secret,
+      paidWithWallet: false as const,
+      amountChargedYen: price.amountChargedYen,
+      walletPaidYen,
+      stripePaidYen,
+      quantity,
+      reservedUntil: reservedUntil.toISOString(),
+    };
+  } catch (e) {
+    // PI作成前に在庫確保済みなので、失敗時は必ず戻す（出品が一覧から消えるのを防ぐ）
+    await releasePendingCheckout(result.id, "stripe_setup_failed");
+    throw e;
+  }
+}
+
+/**
+ * 支払い待ち取引の在庫・ウォレットを戻してキャンセル
+ */
+export async function releasePendingCheckout(
+  transactionId: string,
+  reason = "checkout_failed",
+) {
+  const tx = await prisma.transaction.findUnique({
+    where: { id: transactionId },
+  });
+  if (!tx || tx.status !== "PENDING_PAYMENT") {
+    return { released: false as const };
   }
 
-  const paymentIntent = await stripe.paymentIntents.create({
-    amount: stripePaidYen,
-    currency: "jpy",
-    customer: customerId,
-    capture_method: "automatic",
-    transfer_group: result.id,
-    metadata: {
-      transactionId: result.id,
-      itemId: item.id,
-      buyerId: buyer.id,
-      sellerId: item.sellerId,
-      walletPaidYen: String(walletPaidYen),
-      stripePaidYen: String(stripePaidYen),
-    },
-    automatic_payment_methods: { enabled: true },
+  await prisma.$transaction(async (db) => {
+    const reserved = await db.serialCode.findMany({
+      where: { transactionId: tx.id, status: "RESERVED" },
+      select: { id: true },
+    });
+
+    if (reserved.length > 0) {
+      await db.serialCode.updateMany({
+        where: { id: { in: reserved.map((c) => c.id) } },
+        data: {
+          status: "AVAILABLE",
+          reservedAt: null,
+          reservedUntil: null,
+          transactionId: null,
+        },
+      });
+
+      await db.item.update({
+        where: { id: tx.itemId },
+        data: {
+          stockAvailable: { increment: reserved.length },
+          status: "ACTIVE",
+          soldOutAt: null,
+        },
+      });
+    }
+
+    if (tx.walletPaidYen > 0) {
+      await creditWalletRefund(db, {
+        buyerId: tx.buyerId,
+        amountYen: tx.walletPaidYen,
+        transactionId: tx.id,
+      });
+    }
+
+    await db.transaction.update({
+      where: { id: tx.id },
+      data: {
+        status: "CANCELLED",
+        escrowStatus: "NONE",
+      },
+    });
+
+    await db.auditLog.create({
+      data: {
+        actorUserId: tx.buyerId,
+        action: "TRANSACTION_PAYMENT_CANCELLED",
+        entityType: "Transaction",
+        entityId: tx.id,
+        metadata: { reason },
+      },
+    });
   });
 
-  await prisma.transaction.update({
-    where: { id: result.id },
-    data: { stripePaymentIntentId: paymentIntent.id },
-  });
-
-  return {
-    transactionId: result.id,
-    clientSecret: paymentIntent.client_secret,
-    paidWithWallet: false as const,
-    amountChargedYen: price.amountChargedYen,
-    walletPaidYen,
-    stripePaidYen,
-    quantity,
-    reservedUntil: reservedUntil.toISOString(),
-  };
+  return { released: true as const, transactionId: tx.id };
 }
 
 async function fulfillTransactionById(
@@ -437,6 +629,9 @@ export async function getRevealGateForBuyer(
   buyerId: string,
   transactionId: string,
 ) {
+  const { healStuckConfirmationTimers } = await import("@/services/dispute");
+  await healStuckConfirmationTimers(buyerId);
+
   const tx = await prisma.transaction.findUnique({
     where: { id: transactionId },
     include: {
@@ -537,8 +732,7 @@ export async function revealCodesForBuyer(buyerId: string, transactionId: string
       );
     }
 
-    const windowMin =
-      tx.item.confirmationWindowMinutes || confirmationWindowMinutes();
+    const windowMin = confirmationWindowMinutes();
     const now = new Date();
     const deadline = new Date(now.getTime() + windowMin * 60_000);
 
@@ -585,7 +779,10 @@ export async function revealCodesForBuyer(buyerId: string, transactionId: string
     quantity: tx.quantity,
     codeRevealedAt,
     confirmationDeadlineAt,
-    confirmationTimerPaused: status === "DISPUTED",
+    confirmationTimerPaused:
+      status === "DISPUTED" ||
+      (!confirmationDeadlineAt &&
+        typeof tx.confirmationPausedRemainingSec === "number"),
     confirmationPausedRemainingSec: tx.confirmationPausedRemainingSec,
     buyerConfirmedAt: tx.buyerConfirmedAt,
     hasRated: Boolean(rated),
@@ -593,13 +790,19 @@ export async function revealCodesForBuyer(buyerId: string, transactionId: string
   };
 }
 
-/** 購入者の開示待ち・確認中の取引一覧 */
+/** 購入者の開示待ち・確認中・支払い待ちの取引一覧 */
 export async function listBuyerPurchases(buyerId: string) {
+  // 期限切れ予約を掃除（支払い待ちが残って見えなくなるのを防ぐ）
+  await releaseExpiredPendingCheckouts();
+  // 異議ページでタイマー停止したまま固まった取引を直す
+  const { healStuckConfirmationTimers } = await import("@/services/dispute");
+  await healStuckConfirmationTimers(buyerId);
+
   const rows = await prisma.transaction.findMany({
     where: {
       buyerId,
       status: {
-        in: ["PAID_ESCROW", "CONFIRMATION_WINDOW", "DISPUTED"],
+        in: ["PENDING_PAYMENT", "PAID_ESCROW", "CONFIRMATION_WINDOW", "DISPUTED"],
       },
     },
     orderBy: { createdAt: "desc" },
@@ -612,34 +815,110 @@ export async function listBuyerPurchases(buyerId: string) {
           eventName: true,
         },
       },
+      serialCodes: {
+        where: { status: "RESERVED" },
+        select: { reservedUntil: true },
+        take: 1,
+      },
     },
   });
 
   const holdH = revealHoldHours();
+  const now = Date.now();
 
   return rows.map((tx) => {
-    const awaitingReveal = tx.status === "PAID_ESCROW" || !tx.codeRevealedAt;
+    const awaitingPayment = tx.status === "PENDING_PAYMENT";
+    const awaitingReveal =
+      !awaitingPayment && (tx.status === "PAID_ESCROW" || !tx.codeRevealedAt);
     const revealDeadlineAt =
       tx.revealDeadlineAt ??
       new Date(tx.createdAt.getTime() + holdH * 60 * 60_000);
+    const reservedUntil =
+      tx.serialCodes[0]?.reservedUntil ??
+      new Date(tx.createdAt.getTime() + RESERVE_MINUTES * 60_000);
+
+    let confirmationDeadlineAt = tx.confirmationDeadlineAt;
+    if (
+      !confirmationDeadlineAt &&
+      typeof tx.confirmationPausedRemainingSec === "number" &&
+      tx.confirmationPausedRemainingSec > 0
+    ) {
+      confirmationDeadlineAt = new Date(
+        now + tx.confirmationPausedRemainingSec * 1000,
+      );
+    }
+
     return {
       id: tx.id,
       status: tx.status,
+      awaitingPayment,
       awaitingReveal,
       awaitingRating:
         tx.status === "CONFIRMATION_WINDOW" && Boolean(tx.buyerConfirmedAt),
+      confirmationTimerPaused:
+        tx.status === "DISPUTED" ||
+        (!tx.confirmationDeadlineAt &&
+          typeof tx.confirmationPausedRemainingSec === "number"),
       buyerConfirmedAt: tx.buyerConfirmedAt,
       quantity: tx.quantity,
       amountChargedYen: tx.amountChargedYen,
       codeRevealedAt: tx.codeRevealedAt,
       revealDeadlineAt,
-      confirmationDeadlineAt: tx.confirmationDeadlineAt,
+      reservedUntil: awaitingPayment ? reservedUntil : null,
+      confirmationDeadlineAt,
       createdAt: tx.createdAt,
       itemTitle: tx.item.title,
       artistName: tx.item.artistName,
       eventName: tx.item.eventName,
     };
   });
+}
+
+/** 完了・返金など、過去の購入（シリアル再表示用） */
+export async function listBuyerPurchaseHistory(buyerId: string, take = 40) {
+  const rows = await prisma.transaction.findMany({
+    where: {
+      buyerId,
+      status: { in: ["COMPLETED", "REFUNDED"] },
+      codeRevealedAt: { not: null },
+    },
+    orderBy: { updatedAt: "desc" },
+    take: Math.min(take, 80),
+    include: {
+      item: {
+        select: {
+          title: true,
+          artistName: true,
+          eventName: true,
+        },
+      },
+      seller: {
+        select: {
+          publicId: true,
+          displayName: true,
+          avatarUrl: true,
+        },
+      },
+    },
+  });
+
+  return rows.map((tx) => ({
+    id: tx.id,
+    status: tx.status,
+    quantity: tx.quantity,
+    amountChargedYen: tx.amountChargedYen,
+    codeRevealedAt: tx.codeRevealedAt,
+    createdAt: tx.createdAt,
+    completedAt: tx.payoutReleasedAt ?? tx.updatedAt,
+    itemTitle: tx.item.title,
+    artistName: tx.item.artistName,
+    eventName: tx.item.eventName,
+    seller: {
+      publicId: tx.seller.publicId,
+      displayName: tx.seller.displayName,
+      avatarUrl: tx.seller.avatarUrl,
+    },
+  }));
 }
 
 export async function getCheckoutSessionForBuyer(

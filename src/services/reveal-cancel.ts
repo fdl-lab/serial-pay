@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/lib/api";
 import { revealHoldHours } from "@/lib/stripe";
+import { isTrialListing } from "@/lib/trial-listing";
 import { creditSaleToWallet } from "@/services/wallet";
 import { applyRevealExpiredBuyerPenalty } from "@/services/rating";
 import { createUserMessage } from "@/services/messages";
@@ -8,7 +9,7 @@ import { createUserMessage } from "@/services/messages";
 /**
  * 開示前（PAID_ESCROW）の期限切れ処理。
  * 返金はしない（放置＝キャンセル回避の抜け穴を塞ぐ）。
- * 出品者へ売上確定 + 購入者に評価★1。コードは未開示のまま無効化。
+ * 出品者へ売上確定 + 購入者に評価★1（お試しは★1なし）。コードは未開示のまま無効化。
  */
 export async function forfeitUnrevealedTransaction(
   transactionId: string,
@@ -16,7 +17,9 @@ export async function forfeitUnrevealedTransaction(
 ) {
   const tx = await prisma.transaction.findUnique({
     where: { id: transactionId },
-    include: { item: { select: { title: true } } },
+    include: {
+      item: { select: { title: true, unitPriceYen: true } },
+    },
   });
 
   if (!tx) throw new ApiError(404, "取引が見つかりません", "TX_NOT_FOUND");
@@ -46,6 +49,7 @@ export async function forfeitUnrevealedTransaction(
   }
 
   const now = new Date();
+  const trial = isTrialListing(tx.item);
 
   await prisma.$transaction(async (db) => {
     // 未開示のまま売上確定するので、コードは再利用不可にする
@@ -89,16 +93,20 @@ export async function forfeitUnrevealedTransaction(
           reason: "reveal_expired",
           sellerPayoutYen: tx.sellerPayoutYen,
           noRefund: true,
+          trial,
+          penaltySkipped: trial,
         },
       },
     });
   });
 
-  await applyRevealExpiredBuyerPenalty({
-    transactionId: tx.id,
-    sellerId: tx.sellerId,
-    buyerId: tx.buyerId,
-  });
+  if (!trial) {
+    await applyRevealExpiredBuyerPenalty({
+      transactionId: tx.id,
+      sellerId: tx.sellerId,
+      buyerId: tx.buyerId,
+    });
+  }
 
   await createUserMessage({
     userId: tx.buyerId,
@@ -106,7 +114,9 @@ export async function forfeitUnrevealedTransaction(
     title: "開示期限が切れて取引完了しました",
     body: [
       `「${tx.item.title}」は購入から${holdH}時間以内に開示されなかったため、取引完了になりました。`,
-      "返金はされません。購入者評価に★1が記録されました。",
+      trial
+        ? "お試しのため評価への影響はありません。"
+        : "返金はされません。購入者評価に★1が記録されました。",
     ].join("\n"),
     linkHref: "/me",
     linkLabel: "マイページを見る",
@@ -114,26 +124,28 @@ export async function forfeitUnrevealedTransaction(
     relatedEntityId: tx.id,
   });
 
-  await createUserMessage({
-    userId: tx.sellerId,
-    kind: "REVEAL_EXPIRED_SELLER",
-    title: "未開示のまま期限切れ → 売上確定",
-    body: [
-      `「${tx.item.title}」は購入者が開示せず期限切れになりました。`,
-      "売上はウォレットに反映済みです。購入者には評価★1が付きました。",
-    ].join("\n"),
-    linkHref: "/me",
-    linkLabel: "マイページを見る",
-    relatedEntityType: "Transaction",
-    relatedEntityId: tx.id,
-  });
+  if (!trial) {
+    await createUserMessage({
+      userId: tx.sellerId,
+      kind: "REVEAL_EXPIRED_SELLER",
+      title: "未開示のまま期限切れ → 売上確定",
+      body: [
+        `「${tx.item.title}」は購入者が開示せず期限切れになりました。`,
+        "売上はウォレットに反映済みです。購入者には評価★1が付きました。",
+      ].join("\n"),
+      linkHref: "/me",
+      linkLabel: "マイページを見る",
+      relatedEntityType: "Transaction",
+      relatedEntityId: tx.id,
+    });
+  }
 
   return {
     transactionId: tx.id,
     alreadySettled: false as const,
     status: "COMPLETED" as const,
     creditedYen: tx.sellerPayoutYen,
-    penaltyApplied: true,
+    penaltyApplied: !trial,
   };
 }
 
@@ -145,7 +157,7 @@ export async function cancelUnrevealedTransaction(
   return forfeitUnrevealedTransaction(transactionId, opts);
 }
 
-/** Cron: 開示期限切れの PAID_ESCROW を売上確定＋購入者評価1 */
+/** Cron: 開示期限切れの PAID_ESCROW を売上確定（通常は購入者評価1、お試しは評価なし） */
 export async function expireUnrevealedTransactions() {
   const now = new Date();
   const holdH = revealHoldHours();

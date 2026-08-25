@@ -1,10 +1,20 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import { listPublicItems } from "@/services/listing";
 import { ItemList } from "@/components/listing/ItemList";
 import { ListingSearchBar } from "@/components/listing/ListingSearchBar";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "出品一覧",
+  description: "推し活特化型 応募用シリアルコード譲渡プラットフォーム",
+  openGraph: {
+    title: "出品一覧 | シリアルPay",
+    description: "推し活特化型 応募用シリアルコード譲渡プラットフォーム",
+  },
+};
 
 type Props = {
   searchParams: Promise<{ q?: string }>;
@@ -28,16 +38,23 @@ export default async function HomePage({ searchParams }: Props) {
       <header className="flex items-end justify-between gap-3">
         <div className="min-w-0">
           <p className="brand-mark">シリアルPay</p>
-          <h1 className="text-[1.75rem] font-extrabold tracking-tight sm:text-4xl">
+          <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
             出品一覧
           </h1>
-          <p className="mt-1 text-sm text-ink-soft">
-            即時開示・エスクロー対応のシリアル
+          <p className="me-section-desc">
+            推し活特化型 応募用シリアルコード譲渡プラットフォームです。シリアルコード暗号化・代金一時預かり・コード即時開示で安心安全な取引が可能です。詳しくは
+            <Link
+              href="/guide"
+              className="font-semibold text-mint-deep underline-offset-2 hover:underline"
+            >
+              ご利用ガイド
+            </Link>
+            をご覧ください。
           </p>
         </div>
         <Link
           href="/sell"
-          className="btn btn-primary !min-h-11 !px-3.5 !py-2 text-sm sm:!px-4"
+          className="btn btn-primary !min-h-10 !px-3.5 !py-2 text-xs sm:!px-4"
         >
           出品
         </Link>
@@ -45,7 +62,7 @@ export default async function HomePage({ searchParams }: Props) {
 
       <Suspense
         fallback={
-          <div className="min-h-12 animate-pulse rounded-xl bg-ink/5" />
+          <div className="min-h-10 animate-pulse rounded-xl bg-ink/5" />
         }
       >
         <ListingSearchBar />
@@ -57,7 +74,7 @@ export default async function HomePage({ searchParams }: Props) {
         </p>
       ) : (
         <>
-          <p className="text-xs font-semibold text-ink-soft">
+          <p className="me-item-meta font-semibold">
             {query ? (
               <>
                 「{query}」の検索結果 · {items.length} 件

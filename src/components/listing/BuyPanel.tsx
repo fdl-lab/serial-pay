@@ -16,6 +16,9 @@ type Props = {
   setQuantity: number | null;
   status: string;
   confirmationWindowMinutes: number;
+  /** 応募期限の30分前〜期限後は購入不可 */
+  purchaseBlocked?: boolean;
+  saleEndedLabel?: string;
 };
 
 export function BuyPanel({
@@ -26,10 +29,13 @@ export function BuyPanel({
   stockAvailable,
   setQuantity,
   status,
+  purchaseBlocked = false,
+  saleEndedLabel = "販売終了",
 }: Props) {
   const router = useRouter();
   const trial = isTrialListing({ title, unitPriceYen });
-  const maxQty = listingType === "SET" ? (setQuantity ?? stockAvailable) : stockAvailable;
+  const maxQty =
+    listingType === "SET" ? (setQuantity ?? stockAvailable) : stockAvailable;
   const [qty, setQty] = useState(listingType === "SET" ? maxQty : 1);
   const [useWallet, setUseWallet] = useState(!trial);
   const [busy, setBusy] = useState(false);
@@ -40,7 +46,10 @@ export function BuyPanel({
     () => unitPriceYen * buyQty,
     [unitPriceYen, buyQty],
   );
-  const soldOut = status !== "ACTIVE" || stockAvailable <= 0;
+  const soldOut =
+    purchaseBlocked || status !== "ACTIVE" || stockAvailable <= 0;
+  const endedByExpiry =
+    purchaseBlocked && status === "ACTIVE" && stockAvailable > 0;
 
   async function buy() {
     setBusy(true);
@@ -57,7 +66,11 @@ export function BuyPanel({
       });
       const json = await res.json();
       if (!res.ok) {
-        if (json.code === "PHONE_REQUIRED" || json.code === "EKYC_REQUIRED") {
+        if (json.code === "PHONE_REQUIRED") {
+          setError(`${json.error} → LINEでログインしてください`);
+          return;
+        }
+        if (json.code === "EKYC_REQUIRED") {
           setError(`${json.error} → 本人確認ページへ進んでください`);
           return;
         }
@@ -84,9 +97,9 @@ export function BuyPanel({
 
   return (
     <div className="space-y-3 border-t border-ink/10 pt-4">
-      {trial && (
-        <p className="rounded-xl bg-mint/15 px-3 py-2.5 text-sm font-semibold leading-relaxed text-mint-deep">
-          購入の流れを無料でお試しできます。カード不要の0円トライアルです。
+      {endedByExpiry && (
+        <p className="rounded-xl bg-ink/[0.06] px-3 py-2.5 text-sm font-semibold text-ink-soft">
+          応募期限が近い、または過ぎているため購入できません。
         </p>
       )}
 
@@ -114,7 +127,7 @@ export function BuyPanel({
         </span>
       </div>
 
-      {!trial && (
+      {!trial && !soldOut && (
         <label className="flex min-h-11 items-center gap-2 text-sm font-semibold">
           <input
             type="checkbox"
@@ -129,15 +142,24 @@ export function BuyPanel({
       {error && (
         <div className="space-y-2">
           <p className="banner-error !mb-0">{error}</p>
-          {(error.includes("LINE") ||
-            error.includes("SMS") ||
-            error.includes("eKYC") ||
-            error.includes("本人確認")) && (
-            <Link href="/verify" className="btn btn-ghost btn-block text-sm">
-              本人確認へ進む
+          {(error.includes("ログイン") || error.includes("未ログイン")) && (
+            <Link href="/auth" className="btn btn-primary btn-block text-sm">
+              LINEでログイン
             </Link>
           )}
+          {(error.includes("eKYC") || error.includes("本人確認")) &&
+            !error.includes("ログイン") && (
+              <Link href="/verify" className="btn btn-ghost btn-block text-sm">
+                本人確認へ進む
+              </Link>
+            )}
         </div>
+      )}
+
+      {trial && !soldOut && (
+        <p className="text-xs leading-relaxed text-ink-soft">
+          お試しは LINEログインのみでOK（本人確認は不要）です。
+        </p>
       )}
 
       <button
@@ -147,7 +169,9 @@ export function BuyPanel({
         onClick={buy}
       >
         {soldOut
-          ? "売り切れ"
+          ? purchaseBlocked || status === "SOLD_OUT"
+            ? saleEndedLabel
+            : "売り切れ"
           : busy
             ? "処理中…"
             : trial

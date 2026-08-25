@@ -9,16 +9,25 @@ async function main() {
     where: {
       OR: [
         { title: { startsWith: "[デモ]" } },
-        { title: { startsWith: "[お試し]" } },
         {
-          seller: {
-            email: { in: ["seller@example.com", "buyer@example.com"] },
-          },
+          AND: [
+            {
+              seller: {
+                email: { in: ["seller@example.com", "buyer@example.com"] },
+              },
+            },
+            { NOT: { title: { startsWith: "[お試し]" } } },
+          ],
         },
         {
-          seller: {
-            displayName: { in: ["デモ出品者", "デモ購入者"] },
-          },
+          AND: [
+            {
+              seller: {
+                displayName: { in: ["デモ出品者", "デモ購入者"] },
+              },
+            },
+            { NOT: { title: { startsWith: "[お試し]" } } },
+          ],
         },
       ],
       status: { not: "ARCHIVED" },

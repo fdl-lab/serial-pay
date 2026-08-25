@@ -54,6 +54,7 @@ export async function POST(req: Request, ctx: Ctx) {
       transactionId,
       buffer,
       contentType,
+      fileName: file.name,
     });
 
     return jsonOk({

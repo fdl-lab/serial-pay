@@ -80,6 +80,44 @@ export function clearSessionCookieOptions() {
   };
 }
 
+type OAuthStatePayload = {
+  n: string; // nonce
+  exp: number;
+  next?: string;
+};
+
+/** Cookie なしでも検証できる署名付き OAuth state（独自ドメイン跨ぎ対策） */
+export function createOAuthState(next?: string): string {
+  const payload: OAuthStatePayload = {
+    n: randomBytes(16).toString("hex"),
+    exp: Date.now() + 10 * 60 * 1000,
+    next: next && next.startsWith("/") ? next : undefined,
+  };
+  const body = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+  return `${body}.${sign(body)}`;
+}
+
+export function verifyOAuthState(state: string): { next: string } | null {
+  const [body, sig] = state.split(".");
+  if (!body || !sig) return null;
+  const expected = sign(body);
+  const a = Buffer.from(sig);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  try {
+    const payload = JSON.parse(
+      Buffer.from(body, "base64url").toString("utf8"),
+    ) as OAuthStatePayload;
+    if (!payload.n || !payload.exp || payload.exp < Date.now()) return null;
+    const next =
+      payload.next && payload.next.startsWith("/") ? payload.next : "/verify";
+    return { next };
+  } catch {
+    return null;
+  }
+}
+
+/** @deprecated use createOAuthState */
 export function newOAuthState(): string {
-  return randomBytes(16).toString("hex");
+  return createOAuthState();
 }

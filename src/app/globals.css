@@ -34,6 +34,27 @@
     @apply mb-1 text-sm font-extrabold tracking-wide text-mint-deep;
   }
 
+  /* マイページ各カードの見出し・本文階層 */
+  .me-section-title {
+    @apply text-base font-extrabold tracking-wide text-mint-deep sm:text-lg;
+  }
+
+  .me-section-desc {
+    @apply mt-0.5 text-xs leading-relaxed text-ink-soft;
+  }
+
+  .me-item-title {
+    @apply text-sm font-bold leading-snug text-ink;
+  }
+
+  .me-item-meta {
+    @apply text-[11px] leading-normal text-ink-soft;
+  }
+
+  .me-item-body {
+    @apply text-xs leading-relaxed text-ink-soft;
+  }
+
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50;
   }

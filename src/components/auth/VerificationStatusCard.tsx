@@ -90,7 +90,7 @@ export function VerificationStatusCard() {
           <dd className="font-semibold">{user.phoneVerified ? "完了" : "未完了"}</dd>
         </div>
         <div className="rounded-xl bg-ink/5 px-3 py-2">
-          <dt className="text-ink-soft">eKYC</dt>
+          <dt className="text-ink-soft">本人確認</dt>
           <dd className="font-semibold">{EKYC_LABEL[user.ekycStatus] ?? user.ekycStatus}</dd>
         </div>
       </dl>

@@ -67,7 +67,10 @@ export async function applyEkycWebhook(
       data.ekycRejectedReason = null;
       break;
     case "requires_input":
-      data.ekycStatus = "SUBMITTED";
+      // 撮り直しが必要。SUBMITTEDのままだとボタンが押せなくなるので再提出可能にする
+      data.ekycStatus = "REJECTED";
+      data.ekycRejectedReason =
+        "書類の再提出が必要です。もう一度お試しください";
       break;
     case "canceled":
       data.ekycStatus = "REJECTED";
@@ -81,4 +84,38 @@ export async function applyEkycWebhook(
     where: { id: user.id },
     data,
   });
+}
+
+/**
+ * Webhook が遅延・未到達でも、Stripe の最新ステータスをアプリに反映する
+ */
+export async function refreshEkycFromStripe(userId: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new ApiError(404, "ユーザーが見つかりません", "USER_NOT_FOUND");
+  if (user.ekycStatus === "APPROVED") {
+    return { ekycStatus: user.ekycStatus as EkycStatus, synced: false };
+  }
+  if (!user.ekycProviderId) {
+    return { ekycStatus: user.ekycStatus as EkycStatus, synced: false };
+  }
+
+  const stripe = getStripe();
+  const session = await stripe.identity.verificationSessions.retrieve(
+    user.ekycProviderId,
+  );
+
+  if (session.status === "verified") {
+    await applyEkycWebhook(session.id, "verified");
+    return { ekycStatus: "APPROVED" as const, synced: true };
+  }
+  if (session.status === "requires_input") {
+    await applyEkycWebhook(session.id, "requires_input");
+    return { ekycStatus: "REJECTED" as const, synced: true };
+  }
+  if (session.status === "canceled") {
+    await applyEkycWebhook(session.id, "canceled");
+    return { ekycStatus: "REJECTED" as const, synced: true };
+  }
+
+  return { ekycStatus: user.ekycStatus as EkycStatus, synced: false };
 }

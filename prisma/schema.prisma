@@ -173,6 +173,8 @@ model User {
   ratingsReceived  Rating[]        @relation("Ratee")
   payoutRequests   PayoutRequest[]
   messages         UserMessage[]
+  favorites        Favorite[]
+  listingComments  ListingComment[]
 
   @@index([ekycStatus])
   @@index([stripeConnectStatus])
@@ -317,14 +319,20 @@ model Item {
   suggestedAvgPriceYen Int?
   confirmationWindowMinutes Int @default(30)
 
+  /** シリアルの応募期限・有効期限（この日時を過ぎると販売終了） */
+  serialExpiresAt DateTime?
+
   publishedAt DateTime?
   soldOutAt   DateTime?
 
   serialCodes  SerialCode[]
   transactions Transaction[]
+  favorites    Favorite[]
+  comments     ListingComment[]
 
   @@index([sellerId])
   @@index([status, listingType])
+  @@index([status, serialExpiresAt])
   @@index([artistName])
   @@index([eventName])
   @@map("items")
@@ -539,4 +547,49 @@ model UserMessage {
   @@index([userId, createdAt])
   @@index([userId, readAt])
   @@map("user_messages")
+}
+
+// -----------------------------------------------------------------------------
+// Favorite（お気に入り出品）
+// -----------------------------------------------------------------------------
+
+model Favorite {
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemId String
+  item   Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@id([userId, itemId])
+  @@index([userId, createdAt])
+  @@index([itemId])
+  @@map("favorites")
+}
+
+// -----------------------------------------------------------------------------
+// ListingComment（出品への公開Q&A）
+// -----------------------------------------------------------------------------
+
+model ListingComment {
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  itemId String
+  item   Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  body String @db.Text
+
+  parentId String?
+  parent   ListingComment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies  ListingComment[] @relation("CommentReplies")
+
+  @@index([itemId, createdAt])
+  @@index([authorId, createdAt])
+  @@index([parentId])
+  @@map("listing_comments")
 }

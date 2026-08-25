@@ -10,7 +10,7 @@ const EKYC_LABEL: Record<string, string> = {
   PENDING: "未提出",
   SUBMITTED: "審査中",
   APPROVED: "完了",
-  REJECTED: "却下",
+  REJECTED: "再提出が必要",
 };
 
 function loginLabel(user: VerificationStatus): string {
@@ -41,16 +41,56 @@ export function VerifyClient() {
     }
   }, []);
 
+  const refreshEkyc = useCallback(async () => {
+    try {
+      const res = await apiFetch("/api/ekyc/refresh", { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "状況の確認に失敗しました");
+      await load();
+      if (json.ekycStatus === "APPROVED") {
+        setEkycMessage("本人確認が完了しました。");
+      } else if (json.ekycStatus === "REJECTED") {
+        setEkycMessage(
+          "追加の確認が必要です。「本人確認をやり直す」からもう一度お試しください。",
+        );
+      }
+      return json.ekycStatus as string;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "エラー");
+      return null;
+    }
+  }, [load]);
+
   useEffect(() => {
     void load();
   }, [load]);
 
   useEffect(() => {
-    if (ekycReturn) {
-      setEkycMessage("本人確認を受け付けました。結果が反映されるまで、しばらくお待ちください。");
-      void load();
-    }
-  }, [ekycReturn, load]);
+    if (!ekycReturn) return;
+    setEkycMessage(
+      "本人確認を受け付けました。結果を確認しています…",
+    );
+    let cancelled = false;
+    let tries = 0;
+
+    (async () => {
+      while (!cancelled && tries < 12) {
+        tries += 1;
+        const status = await refreshEkyc();
+        if (status === "APPROVED" || status === "REJECTED") return;
+        await new Promise((r) => setTimeout(r, 2500));
+      }
+      if (!cancelled) {
+        setEkycMessage(
+          "まだ審査中です。少し待ってから「状況を確認する」を押すか、時間をおいてこのページを開き直してください。",
+        );
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ekycReturn, refreshEkyc]);
 
   async function startEkyc() {
     setBusy(true);
@@ -71,6 +111,22 @@ export function VerifyClient() {
     }
   }
 
+  async function checkStatus() {
+    setBusy(true);
+    setError(null);
+    setEkycMessage("状況を確認しています…");
+    try {
+      const status = await refreshEkyc();
+      if (status === "SUBMITTED" || status === "PENDING") {
+        setEkycMessage(
+          "まだ審査中です。通常は数分で完了します。しばらくしてからもう一度確認してください。",
+        );
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const allDone = user?.canBuy;
 
   return (
@@ -78,7 +134,9 @@ export function VerifyClient() {
       <header>
         <p className="brand-mark">シリアルPay</p>
         <h1 className="text-3xl font-extrabold tracking-tight">本人確認</h1>
-        <p className="mt-1 text-ink-soft">購入・出品には LINEログイン + eKYC が必要です</p>
+        <p className="mt-1 text-ink-soft">
+          購入・出品には LINEログインと本人確認が必要です
+        </p>
       </header>
 
       {error && (
@@ -127,8 +185,12 @@ export function VerifyClient() {
             <div className="border-t border-ink/10 pt-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm font-semibold text-ink-soft">eKYC（本人確認）</p>
-                  <p className="font-bold">{EKYC_LABEL[user.ekycStatus] ?? user.ekycStatus}</p>
+                  <p className="text-sm font-semibold text-ink-soft">
+                    本人確認（書類）
+                  </p>
+                  <p className="font-bold">
+                    {EKYC_LABEL[user.ekycStatus] ?? user.ekycStatus}
+                  </p>
                 </div>
                 <span
                   className={`rounded-full px-3 py-1 text-xs font-bold ${
@@ -144,20 +206,36 @@ export function VerifyClient() {
               </div>
 
               {user.phoneVerified && user.ekycStatus !== "APPROVED" && (
-                <button
-                  type="button"
-                  className="btn btn-primary btn-block mt-4 min-h-12"
-                  disabled={busy || user.ekycStatus === "SUBMITTED"}
-                  onClick={startEkyc}
-                >
-                  {busy
-                    ? "準備中…"
-                    : user.ekycStatus === "SUBMITTED"
-                      ? "審査中（しばらくお待ちを）"
+                <div className="mt-4 space-y-2">
+                  {user.ekycStatus === "SUBMITTED" && (
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-block min-h-12"
+                      disabled={busy}
+                      onClick={() => void checkStatus()}
+                    >
+                      {busy ? "確認中…" : "状況を確認する"}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className={`btn btn-block min-h-12 ${
+                      user.ekycStatus === "SUBMITTED"
+                        ? "btn-ghost"
+                        : "btn-primary"
+                    }`}
+                    disabled={busy}
+                    onClick={startEkyc}
+                  >
+                    {busy
+                      ? "準備中…"
                       : user.ekycStatus === "REJECTED"
                         ? "本人確認をやり直す"
-                        : "本人確認を始める（Stripe Identity）"}
-                </button>
+                        : user.ekycStatus === "SUBMITTED"
+                          ? "最初からやり直す"
+                          : "本人確認を始める"}
+                  </button>
+                </div>
               )}
             </div>
           </section>

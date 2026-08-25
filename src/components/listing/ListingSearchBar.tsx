@@ -39,12 +39,12 @@ export function ListingSearchBar() {
           placeholder="アーティスト名・タイトル・イベントで検索"
           enterKeyHint="search"
           autoComplete="off"
-          className="min-h-12 w-full rounded-xl border border-ink/15 bg-white px-3.5 py-3 text-base outline-none ring-mint/40 placeholder:text-ink-soft/70 focus:ring-2"
+          className="min-h-10 w-full rounded-xl border border-ink/15 bg-white px-3 py-2.5 text-sm outline-none ring-mint/40 placeholder:text-ink-soft/70 focus:ring-2"
         />
       </label>
       <button
         type="submit"
-        className="btn btn-primary !min-h-12 shrink-0 !px-4"
+        className="btn btn-primary !min-h-10 shrink-0 !px-3.5 text-xs"
         disabled={pending}
       >
         検索
@@ -52,7 +52,7 @@ export function ListingSearchBar() {
       {searchParams.get("q") && (
         <button
           type="button"
-          className="btn btn-ghost !min-h-12 shrink-0 !px-3"
+          className="btn btn-ghost !min-h-10 shrink-0 !px-3 text-xs"
           onClick={clear}
           disabled={pending}
         >

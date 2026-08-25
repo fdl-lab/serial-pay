@@ -5,6 +5,7 @@ import { syncLineUser } from "@/services/auth";
 import {
   createSessionCookieValue,
   sessionCookieOptions,
+  verifyOAuthState,
 } from "@/lib/auth/app-session";
 import { ApiError } from "@/lib/api";
 
@@ -21,16 +22,22 @@ export async function GET(req: Request) {
 
   const cookieStore = await cookies();
   const savedState = cookieStore.get("line_oauth_state")?.value;
-  const next = cookieStore.get("line_oauth_next")?.value || "/verify";
+  const cookieNext = cookieStore.get("line_oauth_next")?.value;
   const savedRedirectUri = cookieStore.get("line_oauth_redirect_uri")?.value;
-  const safeNext = next.startsWith("/") ? next : "/verify";
 
-  if (!savedState || savedState !== state) {
+  // 1) 署名付き state（独自ドメインでも Cookie なしで通る）
+  // 2) 旧方式の Cookie 一致も許容
+  const verified = verifyOAuthState(state);
+  const cookieOk = Boolean(savedState && savedState === state);
+  if (!verified && !cookieOk) {
     return NextResponse.redirect(`${origin}/auth?error=line_state`);
   }
 
+  const next = cookieNext || verified?.next || "/verify";
+  const safeNext = next.startsWith("/") ? next : "/verify";
+
   try {
-    // authorize 時と同じ redirect_uri を優先（env の localhost ズレを防ぐ）
+    // authorize 時と同じ redirect_uri: Cookie → なければ callback の origin
     const requestOriginForToken = savedRedirectUri
       ? new URL(savedRedirectUri).origin
       : origin;

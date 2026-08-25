@@ -7,6 +7,7 @@ import { CountdownTimer } from "./CountdownTimer";
 import { RecordingWarningModal } from "./RecordingWarningModal";
 import { RatingForm } from "@/components/rating/RatingForm";
 import { apiFetch } from "@/lib/auth/fetch";
+import { formatRemainingUntil } from "@/lib/format";
 
 type RevealPayload = {
   transactionId: string;
@@ -30,7 +31,7 @@ type Props = {
 
 export function CodeRevealScreen({
   transactionId,
-  windowMinutes = 30,
+  windowMinutes = 60,
 }: Props) {
   const router = useRouter();
   /** null = ゲート確認中 / true = コード取得OK / false = 注釈待ち（未開示） */
@@ -44,6 +45,8 @@ export function CodeRevealScreen({
   const [completed, setCompleted] = useState(false);
   const [gateMinutes, setGateMinutes] = useState(windowMinutes);
   const [revealDeadlineAt, setRevealDeadlineAt] = useState<string | null>(null);
+  const [revealHoldHours, setRevealHoldHours] = useState(72);
+  const [remainingLabel, setRemainingLabel] = useState<string | null>(null);
 
   // 先に状態だけ見る（ここではタイマーを開始しない）
   useEffect(() => {
@@ -58,6 +61,9 @@ export function CodeRevealScreen({
         if (cancelled) return;
         if (typeof json.confirmationWindowMinutes === "number") {
           setGateMinutes(json.confirmationWindowMinutes);
+        }
+        if (typeof json.revealHoldHours === "number") {
+          setRevealHoldHours(json.revealHoldHours);
         }
         setRevealDeadlineAt(json.revealDeadlineAt ?? null);
         if (json.awaitingReveal) {
@@ -78,6 +84,20 @@ export function CodeRevealScreen({
       cancelled = true;
     };
   }, [transactionId]);
+
+  // 開示前: 残り時間を更新
+  useEffect(() => {
+    if (!revealDeadlineAt || accepted !== false) {
+      setRemainingLabel(null);
+      return;
+    }
+    const tick = () => {
+      setRemainingLabel(formatRemainingUntil(revealDeadlineAt));
+    };
+    tick();
+    const id = window.setInterval(tick, 30_000);
+    return () => window.clearInterval(id);
+  }, [revealDeadlineAt, accepted]);
 
   // 同意後（または再訪で開示済み）だけコード取得。初回のみここでタイマー開始
   useEffect(() => {
@@ -154,6 +174,8 @@ export function CodeRevealScreen({
       <RecordingWarningModal
         open={showModal}
         windowMinutes={gateMinutes}
+        revealHoldHours={revealHoldHours}
+        remainingLabel={remainingLabel}
         onAccept={() => setAccepted(true)}
         onDefer={deferReveal}
       />
@@ -188,7 +210,9 @@ export function CodeRevealScreen({
                   停止中
                 </p>
                 <p className="mt-1 text-[11px] font-semibold text-ink-soft">
-                  異議審査中のためタイマー停止
+                  {data?.status === "DISPUTED"
+                    ? "異議審査中のためタイマー停止"
+                    : "異議申し立て準備中のためタイマー停止"}
                   {typeof data.confirmationPausedRemainingSec === "number"
                     ? `（残り約 ${Math.ceil(data.confirmationPausedRemainingSec / 60)} 分）`
                     : ""}
@@ -207,7 +231,9 @@ export function CodeRevealScreen({
           </div>
           <p className="text-sm text-ink-soft">
             {data?.status === "DISPUTED" || data?.confirmationTimerPaused
-              ? "異議の審査が終わるまで、自動完了は進みません。結果はメッセージでお知らせします。"
+              ? data?.status === "DISPUTED"
+                ? "異議の審査が終わるまで、自動完了は進みません。結果はメッセージでお知らせします。"
+                : "異議申し立ての準備中はタイマーを止めています。申請を送るか、受取確認に戻ることもできます。"
               : "受取確認のあと、出品者を評価すると取引完了・売上反映になります。期限を過ぎると、評価なしでも自動完了します。"}
           </p>
         </div>
@@ -296,16 +322,30 @@ export function CodeRevealScreen({
 
       {accepted === false && (
         <div className="space-y-3 text-center text-sm text-ink-soft">
+          {remainingLabel && (
+            <p className="rounded-xl bg-coral/10 px-3 py-3 font-semibold text-coral">
+              <span className="block text-xs font-bold uppercase tracking-wider text-ink-soft">
+                開示期限まで
+              </span>
+              <span className="mt-1 block font-mono text-2xl font-extrabold">
+                {remainingLabel}
+              </span>
+              <span className="mt-1 block text-xs font-normal text-ink-soft">
+                購入から{revealHoldHours}
+                時間以内に開示してください（過ぎると返金なし・評価★1）
+              </span>
+            </p>
+          )}
           {revealDeadlineAt && (
-            <p className="rounded-xl bg-coral/10 px-3 py-2 font-semibold text-coral">
-              開示期限{" "}
+            <p className="text-xs text-ink-soft">
+              期限{" "}
               {new Date(revealDeadlineAt).toLocaleString("ja-JP", {
                 month: "numeric",
                 day: "numeric",
                 hour: "2-digit",
                 minute: "2-digit",
               })}
-              まで（キャンセル不可。過ぎると返金なしで完了・評価★1）
+              まで · キャンセル不可
             </p>
           )}
           <p>

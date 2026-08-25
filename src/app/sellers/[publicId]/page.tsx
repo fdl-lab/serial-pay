@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPublicSellerProfile } from "@/services/rating";
+import { ItemList } from "@/components/listing/ItemList";
 
 type Props = { params: Promise<{ publicId: string }> };
 
@@ -18,7 +19,10 @@ export default async function SellerProfilePage({ params }: Props) {
 
   return (
     <main className="space-y-4 pb-28 sm:pb-4">
-      <Link href="/" className="inline-flex min-h-10 items-center text-sm font-bold text-ink-soft">
+      <Link
+        href="/"
+        className="inline-flex min-h-10 items-center text-sm font-bold text-ink-soft"
+      >
         ← 一覧に戻る
       </Link>
 
@@ -47,40 +51,59 @@ export default async function SellerProfilePage({ params }: Props) {
               {" · "}
               売上 {seller.completedSales}件
             </p>
+            <p className="mt-0.5 text-sm text-ink-soft">
+              異議申し立て 受けた {seller.disputeCountAsSeller}件
+              {" · "}
+              出した {seller.disputeCountAsBuyer}件
+            </p>
           </div>
         </div>
 
         <p className="rounded-xl bg-ink/5 px-3 py-2 text-xs text-ink-soft">
           公開IDは変更できません。名前や画像が変わっても、同じ人かどうかの目印になります。
         </p>
+      </section>
 
-        <div>
-          <h2 className="text-lg font-bold">評価一覧</h2>
-          {seller.ratings.length === 0 ? (
-            <p className="mt-2 text-sm text-ink-soft">まだ評価はありません</p>
-          ) : (
-            <ul className="mt-3 divide-y divide-ink/10">
-              {seller.ratings.map((r) => (
-                <li key={r.id} className="py-3">
-                  <p className="font-semibold">
-                    ★{r.score}{" "}
-                    <span className="text-sm font-normal text-ink-soft">
-                      · {r.raterName}
-                      {r.raterPublicId ? ` · ${r.raterPublicId}` : ""}
-                    </span>
-                  </p>
-                  <p className="mt-0.5 text-xs text-ink-soft">{r.itemTitle}</p>
-                  {r.comment && (
-                    <p className="mt-1 text-sm text-ink-soft">{r.comment}</p>
-                  )}
-                  <p className="mt-1 text-xs text-ink-soft">
-                    {new Date(r.createdAt).toLocaleDateString("ja-JP")}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
+      <section className="space-y-3">
+        <div className="flex items-end justify-between gap-3 px-1">
+          <h2 className="text-lg font-bold">出品中</h2>
+          <p className="text-xs text-ink-soft">{seller.listings.length}件</p>
         </div>
+        {seller.listings.length === 0 ? (
+          <section className="card-surface">
+            <p className="text-sm text-ink-soft">いま公開中の出品はありません</p>
+          </section>
+        ) : (
+          <ItemList items={seller.listings} />
+        )}
+      </section>
+
+      <section className="card-surface space-y-3">
+        <h2 className="text-lg font-bold">評価一覧</h2>
+        {seller.ratings.length === 0 ? (
+          <p className="text-sm text-ink-soft">まだ評価はありません</p>
+        ) : (
+          <ul className="divide-y divide-ink/10">
+            {seller.ratings.map((r) => (
+              <li key={r.id} className="py-3">
+                <p className="font-semibold">
+                  ★{r.score}{" "}
+                  <span className="text-sm font-normal text-ink-soft">
+                    · {r.raterName}
+                    {r.raterPublicId ? ` · ${r.raterPublicId}` : ""}
+                  </span>
+                </p>
+                <p className="mt-0.5 text-xs text-ink-soft">{r.itemTitle}</p>
+                {r.comment && (
+                  <p className="mt-1 text-sm text-ink-soft">{r.comment}</p>
+                )}
+                <p className="mt-1 text-xs text-ink-soft">
+                  {new Date(r.createdAt).toLocaleDateString("ja-JP")}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </main>
   );

@@ -42,25 +42,38 @@ export function WalletBalanceCard({
 
   return (
     <section className="card-surface overflow-hidden bg-gradient-to-br from-white via-white to-mint/10">
-      <p className="brand-mark">売上金ウォレット</p>
-      <p className="text-sm text-ink-soft">取引完了後の売上（手数料13%差引後）</p>
-      <p className="mt-3 font-mono text-4xl font-semibold tracking-tight">
+      <p className="me-section-title">売上金ウォレット</p>
+      <p className="me-section-desc">取引完了後の売上（手数料13%差引後）</p>
+      <p className="mt-2 font-mono text-2xl font-semibold tracking-tight sm:text-3xl">
         {formatYen(balanceYen)}
       </p>
       {pendingYen > 0 && (
-        <p className="mt-1 text-sm text-ink-soft">
+        <p className="me-item-meta mt-1">
           出金処理中: {formatYen(pendingYen)}
         </p>
       )}
+      {connectStatus === "ACTIVE" ? (
+        <p className="me-item-meta mt-2 inline-flex items-center rounded-md bg-mint/15 px-2 py-0.5 font-extrabold text-mint-deep">
+          銀行口座 登録完了
+        </p>
+      ) : (
+        <p className="me-section-desc mt-2">
+          出金には銀行口座の登録が必要です
+        </p>
+      )}
       {connectError && <p className="banner-error mt-3">{connectError}</p>}
-      <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-        <button type="button" className="btn btn-primary" onClick={onRequestPayout}>
+      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+        <button
+          type="button"
+          className="btn btn-primary !px-4 !py-2 text-xs"
+          onClick={onRequestPayout}
+        >
           振込申請（手数料 {formatYen(payoutFeeYen)}）
         </button>
         {connectStatus !== "ACTIVE" && (
           <button
             type="button"
-            className="btn btn-ghost"
+            className="btn btn-ghost !px-4 !py-2 text-xs"
             disabled={connectBusy}
             onClick={startConnect}
           >

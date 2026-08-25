@@ -1,8 +1,22 @@
 import { ZodError } from "zod";
-import { jsonCreated, jsonError, requireUser, ApiError } from "@/lib/api";
-import { createDispute } from "@/services/dispute";
+import { jsonCreated, jsonError, jsonOk, requireUser, ApiError } from "@/lib/api";
+import { createDispute, getDisputePageState } from "@/services/dispute";
 
 type Ctx = { params: Promise<{ id: string }> };
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+export async function GET(req: Request, ctx: Ctx) {
+  try {
+    const user = await requireUser(req);
+    const { id } = await ctx.params;
+    const result = await getDisputePageState(user.id, id);
+    return jsonOk(result);
+  } catch (e) {
+    return jsonError(e);
+  }
+}
 
 export async function POST(req: Request, ctx: Ctx) {
   try {

@@ -24,8 +24,8 @@ export function platformFeePercent(): number {
 }
 
 export function confirmationWindowMinutes(): number {
-  const raw = Number(process.env.CONFIRMATION_WINDOW_MINUTES ?? "30");
-  if (!Number.isFinite(raw) || raw < 5 || raw > 120) return 30;
+  const raw = Number(process.env.CONFIRMATION_WINDOW_MINUTES ?? "60");
+  if (!Number.isFinite(raw) || raw < 5 || raw > 120) return 60;
   return raw;
 }
 

@@ -223,6 +223,8 @@ export function toVerificationStatus(user: User): VerificationStatus {
     avatarUrl: user.avatarUrl,
     ratingScore: Number(user.ratingScore),
     ratingCount: user.ratingCount,
+    disputeCountAsBuyer: user.disputeCountAsBuyer,
+    disputeCountAsSeller: user.disputeCountAsSeller,
     profileCompletedAt: user.profileCompletedAt,
     phoneVerified: user.phoneVerified,
     phoneE164: user.phoneE164,

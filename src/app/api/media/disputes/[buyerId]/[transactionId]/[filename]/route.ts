@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser, jsonError, ApiError } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
-import { readLocalDisputeRecording } from "@/lib/storage/recording";
+import { readDisputeRecording } from "@/lib/storage/recording";
 
 type Ctx = {
   params: Promise<{ buyerId: string; transactionId: string; filename: string }>;
@@ -30,7 +30,7 @@ export async function GET(req: Request, ctx: Ctx) {
       }
     }
 
-    const buf = await readLocalDisputeRecording(buyerId, transactionId, filename);
+    const buf = await readDisputeRecording(buyerId, transactionId, filename);
     return new NextResponse(buf, {
       status: 200,
       headers: {

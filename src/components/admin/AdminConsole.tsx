@@ -20,6 +20,28 @@ function normalizeAdminSecret(raw: string) {
   return s.trim();
 }
 
+type VolumeBucket = {
+  count: number;
+  amountChargedYen: number;
+  platformFeeYen: number;
+  subtotalYen: number;
+};
+
+type TradeStats = {
+  timezone: string;
+  todayStartsAt: string;
+  today: VolumeBucket;
+  allTime: VolumeBucket;
+  users: {
+    lineTotal: number;
+    lineActive: number;
+    lineToday: number;
+    usersTotal: number;
+    usersActive: number;
+    ekycApproved: number;
+  };
+};
+
 type DisputeRow = {
   id: string;
   status: string;
@@ -64,11 +86,16 @@ function adminFetch(path: string, secret: string, init?: RequestInit) {
 export function AdminConsole() {
   const [secret, setSecret] = useState("");
   const [unlocked, setUnlocked] = useState(false);
+  const [stats, setStats] = useState<TradeStats | null>(null);
   const [disputes, setDisputes] = useState<DisputeRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
+  const [msgTo, setMsgTo] = useState("");
+  const [msgTitle, setMsgTitle] = useState("");
+  const [msgBody, setMsgBody] = useState("");
+  const [msgBusy, setMsgBusy] = useState(false);
 
   useEffect(() => {
     const saved = window.sessionStorage.getItem(SECRET_KEY);
@@ -81,12 +108,20 @@ export function AdminConsole() {
   const load = useCallback(async (adminSecret: string) => {
     setError(null);
     setMessage(null);
-    const res = await adminFetch("/api/admin/disputes", adminSecret);
-    const json = await res.json();
-    if (!res.ok) {
-      throw new Error(json.error ?? "取得に失敗しました");
+    const [disputesRes, statsRes] = await Promise.all([
+      adminFetch("/api/admin/disputes", adminSecret),
+      adminFetch("/api/admin/stats", adminSecret),
+    ]);
+    const disputesJson = await disputesRes.json();
+    if (!disputesRes.ok) {
+      throw new Error(disputesJson.error ?? "取得に失敗しました");
     }
-    setDisputes(json.disputes ?? []);
+    const statsJson = await statsRes.json();
+    if (!statsRes.ok) {
+      throw new Error(statsJson.error ?? "統計の取得に失敗しました");
+    }
+    setDisputes(disputesJson.disputes ?? []);
+    setStats(statsJson.stats ?? null);
   }, []);
 
   useEffect(() => {
@@ -124,6 +159,7 @@ export function AdminConsole() {
     setUnlocked(false);
     setSecret("");
     setDisputes(null);
+    setStats(null);
   }
 
   async function resolve(
@@ -153,6 +189,35 @@ export function AdminConsole() {
       setError(err instanceof Error ? err.message : "エラー");
     } finally {
       setBusyId(null);
+    }
+  }
+
+  async function sendAdminMessage(e: FormEvent) {
+    e.preventDefault();
+    setMsgBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await adminFetch("/api/admin/messages", secret, {
+        method: "POST",
+        body: JSON.stringify({
+          to: msgTo,
+          title: msgTitle,
+          body: msgBody,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "送信に失敗しました");
+      setMessage(
+        `メッセージを送信しました（${json.user?.publicId ?? json.user?.id ?? ""}）`,
+      );
+      setMsgTo("");
+      setMsgTitle("");
+      setMsgBody("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "エラー");
+    } finally {
+      setMsgBusy(false);
     }
   }
 
@@ -199,7 +264,7 @@ export function AdminConsole() {
           <p className="brand-mark">シリアルPay</p>
           <h1 className="text-3xl font-extrabold tracking-tight">管理画面</h1>
           <p className="mt-1 text-sm text-ink-soft">
-            未対応の異議申し立てを確認・審査できます
+            取扱高の確認と、未対応の異議審査ができます
           </p>
         </div>
         <div className="flex gap-2">
@@ -223,10 +288,118 @@ export function AdminConsole() {
       {error && <p className="banner-error">{error}</p>}
       {message && <p className="banner-ok">{message}</p>}
 
+      {stats && (
+        <section className="space-y-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="card-surface space-y-2">
+              <p className="text-xs font-extrabold text-mint-deep">
+                LINE登録（累計）
+              </p>
+              <p className="text-2xl font-extrabold tracking-tight">
+                {stats.users.lineTotal.toLocaleString("ja-JP")}
+              </p>
+              <p className="text-sm text-ink-soft">
+                有効 {stats.users.lineActive.toLocaleString("ja-JP")}人 · 本日+
+                {stats.users.lineToday.toLocaleString("ja-JP")}
+              </p>
+            </div>
+            <div className="card-surface space-y-2">
+              <p className="text-xs font-extrabold text-mint-deep">
+                本人確認済
+              </p>
+              <p className="text-2xl font-extrabold tracking-tight">
+                {stats.users.ekycApproved.toLocaleString("ja-JP")}
+              </p>
+              <p className="text-sm text-ink-soft">
+                有効ユーザー{" "}
+                {stats.users.usersActive.toLocaleString("ja-JP")}人中
+              </p>
+            </div>
+            <div className="card-surface space-y-2">
+              <p className="text-xs font-extrabold text-mint-deep">
+                本日（JST）取扱高
+              </p>
+              <p className="text-2xl font-extrabold tracking-tight">
+                {formatYen(stats.today.amountChargedYen)}
+              </p>
+              <p className="text-sm text-ink-soft">
+                {stats.today.count}件 · 手数料{" "}
+                {formatYen(stats.today.platformFeeYen)}
+              </p>
+            </div>
+            <div className="card-surface space-y-2">
+              <p className="text-xs font-extrabold text-mint-deep">累計取扱高</p>
+              <p className="text-2xl font-extrabold tracking-tight">
+                {formatYen(stats.allTime.amountChargedYen)}
+              </p>
+              <p className="text-sm text-ink-soft">
+                {stats.allTime.count}件 · 手数料{" "}
+                {formatYen(stats.allTime.platformFeeYen)}
+              </p>
+            </div>
+          </div>
+          <p className="text-xs text-ink-soft">
+            LINE登録は退会後も含む累計。有効＝現在アカウントあり。本人確認・有効ユーザーはLINE連携のみ（デモ用シードは除く）。お試し・デモ出品の取引は取扱高から除いています。
+          </p>
+        </section>
+      )}
+
+      <section className="card-surface space-y-3">
+        <div>
+          <h2 className="text-lg font-extrabold tracking-tight">
+            事務局メッセージ送信
+          </h2>
+          <p className="mt-1 text-sm text-ink-soft">
+            公開ID・ユーザーID・メールのいずれかで宛先を指定
+          </p>
+        </div>
+        <form className="space-y-3" onSubmit={sendAdminMessage}>
+          <label className="field">
+            <span>宛先</span>
+            <input
+              required
+              value={msgTo}
+              onChange={(e) => setMsgTo(e.target.value)}
+              placeholder="SP-XXXX / user id / email"
+            />
+          </label>
+          <label className="field">
+            <span>件名</span>
+            <input
+              required
+              value={msgTitle}
+              onChange={(e) => setMsgTitle(e.target.value)}
+              placeholder="お知らせの件名"
+            />
+          </label>
+          <label className="field">
+            <span>本文</span>
+            <textarea
+              required
+              rows={4}
+              value={msgBody}
+              onChange={(e) => setMsgBody(e.target.value)}
+              placeholder="ユーザーのマイページに届きます"
+            />
+          </label>
+          <button
+            type="submit"
+            className="btn btn-primary btn-block"
+            disabled={msgBusy}
+          >
+            {msgBusy ? "送信中…" : "送信する"}
+          </button>
+        </form>
+      </section>
+
       {disputes === null && (
         <section className="card-surface">
           <p className="text-sm text-ink-soft">読み込み中…</p>
         </section>
+      )}
+
+      {disputes && (
+        <h2 className="text-lg font-extrabold tracking-tight">異議申し立て</h2>
       )}
 
       {disputes && disputes.length === 0 && (
@@ -307,17 +480,22 @@ export function AdminConsole() {
               )}
 
               <div>
-                <a
-                  href={d.screenRecordingUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="btn btn-ghost !px-3 !py-2 text-xs"
-                >
-                  画録を開く
-                  {d.recordingDurationSec
-                    ? `（約${d.recordingDurationSec}秒）`
-                    : ""}
-                </a>
+                {d.screenRecordingUrl &&
+                d.screenRecordingUrl !== "(purged)" ? (
+                  <a
+                    href={d.screenRecordingUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn btn-ghost !px-3 !py-2 text-xs"
+                  >
+                    画録を開く
+                    {d.recordingDurationSec
+                      ? `（約${d.recordingDurationSec}秒）`
+                      : ""}
+                  </a>
+                ) : (
+                  <span className="text-xs text-ink-soft">画録削除済み</span>
+                )}
               </div>
 
               <label className="field">

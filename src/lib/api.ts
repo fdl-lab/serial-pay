@@ -179,12 +179,17 @@ export async function requireUser(req: Request): Promise<User> {
   }
 }
 
-export function assertBuyerEligible(user: User) {
+/** LINEログイン済み（お試し購入など本人確認不要のケース向け） */
+export function assertPhoneVerified(user: User) {
   if (!user.phoneVerified) {
     throw new ApiError(403, "LINEログインが完了していません", "PHONE_REQUIRED");
   }
+}
+
+export function assertBuyerEligible(user: User) {
+  assertPhoneVerified(user);
   if (user.ekycStatus !== "APPROVED") {
-    throw new ApiError(403, "eKYC（本人確認）が完了していません", "EKYC_REQUIRED");
+    throw new ApiError(403, "本人確認が完了していません", "EKYC_REQUIRED");
   }
 }
 

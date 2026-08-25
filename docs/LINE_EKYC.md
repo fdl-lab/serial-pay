@@ -15,9 +15,11 @@
 http://127.0.0.1:3000/api/auth/line/callback
 ```
 
-本番では（両方登録してOK）:
+本番では（使っているURLをすべて登録）:
 
 ```text
+https://www.serial-pay.com/api/auth/line/callback
+https://serial-pay.com/api/auth/line/callback
 https://serial-pay.vercel.app/api/auth/line/callback
 http://127.0.0.1:3000/api/auth/line/callback
 ```
@@ -42,12 +44,12 @@ NEXT_PUBLIC_APP_URL="http://127.0.0.1:3000"
 ```env
 LINE_CHANNEL_ID="（同じでOK）"
 LINE_CHANNEL_SECRET="（同じでOK）"
-LINE_CALLBACK_URL="https://serial-pay.vercel.app/api/auth/line/callback"
-NEXT_PUBLIC_APP_URL="https://serial-pay.vercel.app"
+LINE_CALLBACK_URL="https://www.serial-pay.com/api/auth/line/callback"
+NEXT_PUBLIC_APP_URL="https://www.serial-pay.com"
 ```
 
-アプリ側は本番リクエスト時に localhost の callback env が残っていても **リクエスト origin を優先**する。  
-ただし **LINE Developers 側に本番 callback が登録されていないと失敗する**。
+アプリは本番ホストからのログイン時、**いま開いているドメイン**の callback を使います。  
+そのため **LINE Developers に www / apex / vercel など実際に使うURLをすべて登録**してください。
 
 ## 3. アプリ側フロー
 
@@ -72,5 +74,5 @@ NEXT_PUBLIC_DEV_AUTH_BYPASS="false"
 | 症状 | 確認 |
 |------|------|
 | `line_config` | `.env.local` の CHANNEL_ID / SECRET |
-| `line_callback` / token error | コールバックURLの不一致（`localhost` vs `127.0.0.1`） |
-| `line_state` | Cookie が落ちてる。再試行 |
+| `line_callback` / token error | コールバックURLの不一致（`localhost` vs `127.0.0.1`、www 未登録） |
+| `line_state` | 署名付き state で緩和済み。まだ出る場合は再試行 |

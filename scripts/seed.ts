@@ -212,7 +212,7 @@ async function main() {
         eventName: "はじめての購入体験",
         category: "お試し",
         description:
-          "購入の流れをお試しいただけます。\nカード不要・0円で、お支払いからシリアル開示までを体験できます。",
+          "カード不要・0円で、お支払いからシリアル開示までの流れを体験できます。",
         listingType: "INVENTORY",
         status: "ACTIVE",
         unitPriceYen: 0,
@@ -263,7 +263,7 @@ async function main() {
           stockTotal: { increment: need },
           stockAvailable: { increment: need },
           description:
-            "購入の流れをお試しいただけます。\nカード不要・0円で、お支払いからシリアル開示までを体験できます。",
+            "カード不要・0円で、お支払いからシリアル開示までの流れを体験できます。",
           publishedAt: trialItem.publishedAt ?? new Date(),
         },
       });
@@ -276,7 +276,7 @@ async function main() {
           status: "ACTIVE",
           soldOutAt: null,
           description:
-            "購入の流れをお試しいただけます。\nカード不要・0円で、お支払いからシリアル開示までを体験できます。",
+            "カード不要・0円で、お支払いからシリアル開示までの流れを体験できます。",
         },
       });
       console.log("0円お試し出品は既にあるよ（在庫OK）");

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { formatYen } from "@/lib/format";
 import { apiFetch } from "@/lib/auth/fetch";
+import { ME_PREVIEW_LIMIT, MoreLink } from "@/components/wallet/MeListHelpers";
 
 type ListingRow = {
   id: string;
@@ -27,8 +28,12 @@ const statusLabel: Record<string, string> = {
 
 export function SellerListingsCard({
   initialItems,
+  previewLimit,
+  moreHref = "/me/listings",
 }: {
   initialItems?: ListingRow[] | null;
+  previewLimit?: number;
+  moreHref?: string;
 }) {
   const [items, setItems] = useState<ListingRow[] | null>(initialItems ?? null);
   const [error, setError] = useState<string | null>(null);
@@ -91,8 +96,8 @@ export function SellerListingsCard({
     <section className="card-surface space-y-3">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold">出品中のシリアル</h2>
-          <p className="mt-1 text-sm text-ink-soft">
+          <h2 className="me-section-title">出品中のシリアル</h2>
+          <p className="me-section-desc">
             内容の編集や、出品の削除（非公開）ができます
           </p>
         </div>
@@ -114,7 +119,10 @@ export function SellerListingsCard({
 
       {items && items.length > 0 && (
         <ul className="divide-y divide-ink/10">
-          {items.map((item) => (
+          {(typeof previewLimit === "number"
+            ? items.slice(0, previewLimit)
+            : items
+          ).map((item) => (
             <li key={item.id} className="space-y-2 py-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -123,8 +131,8 @@ export function SellerListingsCard({
                       {item.artistName}
                     </p>
                   )}
-                  <p className="truncate font-semibold">{item.title}</p>
-                  <p className="text-xs text-ink-soft">
+                  <p className="me-item-title truncate">{item.title}</p>
+                  <p className="me-item-meta">
                     {statusLabel[item.status] ?? item.status}
                     {" · "}
                     {formatYen(item.unitPriceYen)} / 枚
@@ -161,6 +169,13 @@ export function SellerListingsCard({
             </li>
           ))}
         </ul>
+      )}
+      {items && typeof previewLimit === "number" && (
+        <MoreLink
+          href={moreHref}
+          total={items.length}
+          limit={previewLimit || ME_PREVIEW_LIMIT}
+        />
       )}
     </section>
   );

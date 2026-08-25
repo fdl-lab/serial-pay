@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { apiFetch } from "@/lib/auth/fetch";
 import { RatingForm } from "@/components/rating/RatingForm";
+import { ME_PREVIEW_LIMIT, MoreLink } from "@/components/wallet/MeListHelpers";
 
 type Pending = {
   transactionId: string;
@@ -17,8 +18,12 @@ type Pending = {
 
 export function PendingRatingsCard({
   initialPending,
+  previewLimit,
+  moreHref = "/me/ratings",
 }: {
   initialPending?: Pending[] | null;
+  previewLimit?: number;
+  moreHref?: string;
 }) {
   const [pending, setPending] = useState<Pending[] | null>(
     initialPending ?? null,
@@ -59,24 +64,29 @@ export function PendingRatingsCard({
   }
   if (pending.length === 0) return null;
 
+  const visible =
+    typeof previewLimit === "number"
+      ? pending.slice(0, previewLimit)
+      : pending;
+
   return (
     <section className="card-surface space-y-3">
       <div>
-        <h2 className="text-lg font-bold">評価して取引を完了してください</h2>
-        <p className="mt-1 text-sm text-ink-soft">
+        <h2 className="me-section-title">評価して取引を完了してください</h2>
+        <p className="me-section-desc">
           受取確認済みで、まだ評価していない取引があります。評価すると取引完了になります
         </p>
       </div>
       <ul className="divide-y divide-ink/10">
-        {pending.map((p) => (
+        {visible.map((p) => (
           <li key={p.transactionId} className="space-y-3 py-3">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="truncate font-semibold">
+                <p className="me-item-title truncate">
                   {p.artistName ? `${p.artistName} · ` : ""}
                   {p.itemTitle}
                 </p>
-                <p className="text-xs text-ink-soft">
+                <p className="me-item-meta">
                   出品者 {p.seller.displayName ?? "出品者"}
                   {p.seller.publicId ? ` · ${p.seller.publicId}` : ""}
                 </p>
@@ -113,6 +123,13 @@ export function PendingRatingsCard({
           </li>
         ))}
       </ul>
+      {typeof previewLimit === "number" && (
+        <MoreLink
+          href={moreHref}
+          total={pending.length}
+          limit={previewLimit || ME_PREVIEW_LIMIT}
+        />
+      )}
     </section>
   );
 }

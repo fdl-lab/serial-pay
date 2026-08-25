@@ -16,22 +16,23 @@ function isLocalHostUrl(url: string): boolean {
 
 /**
  * コールバックURLを解決する。
- * 本番で localhost の env が残っていても、リクエスト origin を優先する。
+ * 本番ホストからのリクエストは、独自ドメインでもその origin を優先する
+ *（LINE Developers に同じコールバックを登録しておくこと）。
  */
 export function resolveLineCallbackUrl(requestOrigin?: string | null): string {
   const configured = process.env.LINE_CALLBACK_URL?.trim();
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
   const origin = (requestOrigin || "").replace(/\/$/, "");
 
+  // 実ホスト（www / apex / vercel）→ いま開いているドメインで callback
+  if (origin && !isLocalHostUrl(origin)) {
+    return `${origin}/api/auth/line/callback`;
+  }
+
   if (configured) {
-    // 本番リクエストなのに env がローカルのまま → origin を使う
-    if (origin && !isLocalHostUrl(origin) && isLocalHostUrl(configured)) {
-      return `${origin}/api/auth/line/callback`;
-    }
     return configured;
   }
 
-  if (origin) return `${origin}/api/auth/line/callback`;
   if (appUrl) return `${appUrl}/api/auth/line/callback`;
   return "http://127.0.0.1:3000/api/auth/line/callback";
 }

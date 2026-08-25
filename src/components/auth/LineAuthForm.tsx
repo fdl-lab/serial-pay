@@ -36,7 +36,7 @@ export function LineAuthForm({ redirectTo = "/verify" }: { redirectTo?: string }
         <p className="brand-mark">シリアルPay</p>
         <h1 className="text-3xl font-extrabold tracking-tight">LINEでログイン</h1>
         <p className="mt-2 text-ink-soft">
-          LINEアカウントでかんたんにログインできます。購入・出品には本人確認（eKYC）も必要です。
+          LINEアカウントでかんたんにログインできます。購入・出品には本人確認も必要です。
         </p>
       </header>
 

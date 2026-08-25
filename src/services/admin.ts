@@ -1,7 +1,112 @@
 import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/lib/api";
+import type { TransactionStatus } from "@prisma/client";
 
 const OPEN_STATUSES = ["SUBMITTED", "UNDER_REVIEW"] as const;
+
+/** 決済が成立した取引（取扱高集計対象） */
+const VOLUME_STATUSES: TransactionStatus[] = [
+  "PAID_ESCROW",
+  "CONFIRMATION_WINDOW",
+  "COMPLETED",
+  "DISPUTED",
+  "REFUNDED",
+];
+
+/** Asia/Tokyo の当日0時（UTC Date） */
+function startOfTodayJst(now = new Date()): Date {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const y = parts.find((p) => p.type === "year")?.value;
+  const m = parts.find((p) => p.type === "month")?.value;
+  const d = parts.find((p) => p.type === "day")?.value;
+  return new Date(`${y}-${m}-${d}T00:00:00+09:00`);
+}
+
+async function aggregateVolume(createdAtGte?: Date) {
+  const where = {
+    status: { in: VOLUME_STATUSES },
+    // お試し（0円）・デモ出品の取引は取扱高から除外
+    amountChargedYen: { gt: 0 },
+    item: {
+      unitPriceYen: { gt: 0 },
+      AND: [
+        { NOT: { title: { startsWith: "[お試し]" } } },
+        { NOT: { title: { startsWith: "[デモ]" } } },
+      ],
+    },
+    ...(createdAtGte ? { createdAt: { gte: createdAtGte } } : {}),
+  };
+
+  const [agg, count] = await Promise.all([
+    prisma.transaction.aggregate({
+      where,
+      _sum: {
+        amountChargedYen: true,
+        platformFeeYen: true,
+        subtotalYen: true,
+      },
+    }),
+    prisma.transaction.count({ where }),
+  ]);
+
+  return {
+    count,
+    amountChargedYen: agg._sum.amountChargedYen ?? 0,
+    platformFeeYen: agg._sum.platformFeeYen ?? 0,
+    subtotalYen: agg._sum.subtotalYen ?? 0,
+  };
+}
+
+export async function getAdminTradeStats() {
+  const todayStart = startOfTodayJst();
+  /** 実ユーザー集計: LINE連携あり（シードのデモ購入者・出品者は除外） */
+  const lineLinkedUser = {
+    isSuspended: false as const,
+    OR: [{ lineUserId: { not: null } }, { authProvider: "line" }],
+  };
+
+  const [
+    today,
+    allTime,
+    lineTotal,
+    lineActive,
+    lineToday,
+    usersTotal,
+    usersActive,
+    ekycApproved,
+  ] = await Promise.all([
+    aggregateVolume(todayStart),
+    aggregateVolume(),
+    prisma.lineIdentity.count(),
+    prisma.lineIdentity.count({ where: { currentUserId: { not: null } } }),
+    prisma.lineIdentity.count({ where: { createdAt: { gte: todayStart } } }),
+    prisma.user.count(),
+    prisma.user.count({ where: lineLinkedUser }),
+    prisma.user.count({
+      where: { ...lineLinkedUser, ekycStatus: "APPROVED" },
+    }),
+  ]);
+
+  return {
+    timezone: "Asia/Tokyo",
+    todayStartsAt: todayStart.toISOString(),
+    today,
+    allTime,
+    users: {
+      lineTotal,
+      lineActive,
+      lineToday,
+      usersTotal,
+      usersActive,
+      ekycApproved,
+    },
+  };
+}
 
 const REASON_LABEL: Record<string, string> = {
   CODE_INVALID: "コードが無効",

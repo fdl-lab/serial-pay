@@ -6,6 +6,10 @@ export type VerificationStatus = {
   avatarUrl: string | null;
   ratingScore: number;
   ratingCount: number;
+  /** 購入者として異議を出した回数 */
+  disputeCountAsBuyer: number;
+  /** 出品者として異議を受けた回数 */
+  disputeCountAsSeller: number;
   profileCompletedAt: Date | null;
   /** ログインチャネル確認済み（LINE / 旧SMS） */
   phoneVerified: boolean;

@@ -1,7 +1,7 @@
 {
   "name": "シリアルPay",
   "short_name": "シリアルPay",
-  "description": "推し活特化型 シリアルコード即時売買",
+  "description": "推し活特化型 応募用シリアルコード譲渡プラットフォーム",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f7f4ef",

@@ -30,8 +30,8 @@ export default function PrivacyPage() {
         <ul className="list-disc space-y-1 pl-5">
           <li>アカウント情報（表示名、公開ID、プロフィール画像、LINE連携に伴う識別子等）</li>
           <li>連絡先情報（メールアドレス、電話番号等。取得する場合）</li>
-          <li>本人確認（eKYC）に関する情報およびその処理結果（Stripe Identity等を利用）</li>
-          <li>取引情報（出品・購入履歴、決済金額、エスクロー状態、評価、異議内容、添付画録等）</li>
+          <li>本人確認に関する情報およびその処理結果（決済事業者が提供する本人確認サービス等を利用）</li>
+          <li>取引情報（出品・購入履歴、決済金額、代金のお預かり状態、評価、異議内容、添付画録等）</li>
           <li>出金・振込に関する情報（Connect連携により決済事業者が取得・管理する口座情報を含む）</li>
           <li>端末・ログ情報（IPアドレス、ブラウザ情報、アクセス日時、Cookie等）</li>
         </ul>
@@ -110,10 +110,10 @@ export default function PrivacyPage() {
           <br />
           メール：
           <a
-            href="mailto:info@f-d-l.jp"
+            href="mailto:info@serial-pay.com"
             className="font-semibold text-mint-deep underline"
           >
-            info@f-d-l.jp
+            info@serial-pay.com
           </a>
           <br />
           所在地：東京都港区北青山1丁目3番1号 アールキューブ青山3階

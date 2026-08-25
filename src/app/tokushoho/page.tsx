@@ -60,10 +60,10 @@ export default function TokushohoPage() {
           <Row label="連絡先">
             メール：
             <a
-              href="mailto:info@f-d-l.jp"
+              href="mailto:info@serial-pay.com"
               className="font-semibold text-mint-deep underline"
             >
-              info@f-d-l.jp
+              info@serial-pay.com
             </a>
             <br />
             <span className="text-xs">
@@ -93,7 +93,7 @@ export default function TokushohoPage() {
             クレジットカード決済（Stripe）、および本サービス内の売上金残高による支払い（併用を含む場合があります）。
           </Row>
           <Row label="支払時期">
-            購入手続き時に即時決済・預託（エスクロー）されます。
+            購入手続き時に即時決済され、代金は当社が一時お預かりします。
           </Row>
           <Row label="役務の提供時期">
             決済完了後、購入者は取引画面からシリアルコードを開示できます。
@@ -117,7 +117,7 @@ export default function TokushohoPage() {
             をご確認ください。
           </Row>
           <Row label="動作環境">
-            最新のスマートフォンブラウザ、またはデスクトップブラウザを推奨します。LINEログインおよび本人確認（eKYC）が利用できる環境が必要です。
+            最新のスマートフォンブラウザ、またはデスクトップブラウザを推奨します。LINEログインおよび本人確認が利用できる環境が必要です。
           </Row>
         </dl>
       </section>

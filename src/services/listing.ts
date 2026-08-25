@@ -4,7 +4,24 @@ import { prisma } from "@/lib/prisma";
 import { encryptSerial, hashSerial } from "@/lib/crypto/serial";
 import { ApiError, assertSellerEligible } from "@/lib/api";
 import { isTrialListing } from "@/lib/trial-listing";
+import {
+  SERIAL_EXPIRY_BUFFER_MS,
+  isSerialExpiryTooSoon,
+} from "@/lib/serial-expiry";
 import type { User } from "@prisma/client";
+
+function assertSerialExpiryForPublish(expiresAt: Date) {
+  if (Number.isNaN(expiresAt.getTime())) {
+    throw new ApiError(400, "応募期限が正しくありません", "INVALID_EXPIRY");
+  }
+  if (isSerialExpiryTooSoon(expiresAt)) {
+    throw new ApiError(
+      400,
+      `応募期限は現在から30分より先の日時を選んでください`,
+      "EXPIRY_TOO_SOON",
+    );
+  }
+}
 
 const listingSchema = z
   .object({
@@ -22,6 +39,8 @@ const listingSchema = z
     bulkDiscountMinQty: z.number().int().min(2).optional().nullable(),
     bulkDiscountPercent: z.number().int().min(1).max(50).optional().nullable(),
     confirmationWindowMinutes: z.number().int().min(15).max(60).optional(),
+    /** ISO8601。応募期限・シリアル有効期限 */
+    serialExpiresAt: z.string().datetime(),
     publish: z.boolean().optional().default(true),
   })
   .superRefine((data, ctx) => {
@@ -57,6 +76,9 @@ export async function createListing(seller: User, raw: unknown) {
   assertSellerEligible(seller);
 
   const input = listingSchema.parse(raw);
+  const serialExpiresAt = new Date(input.serialExpiresAt);
+  assertSerialExpiryForPublish(serialExpiresAt);
+
   const hashes = input.serialCodes.map((c) => hashSerial(c));
   const unique = new Set(hashes);
   if (unique.size !== hashes.length) {
@@ -94,7 +116,8 @@ export async function createListing(seller: User, raw: unknown) {
         bulkDiscountMinQty: input.bulkDiscountMinQty,
         bulkDiscountPercent: input.bulkDiscountPercent,
         suggestedAvgPriceYen: avg?.avgPriceYen ?? null,
-        confirmationWindowMinutes: input.confirmationWindowMinutes ?? 30,
+        confirmationWindowMinutes: input.confirmationWindowMinutes ?? 60,
+        serialExpiresAt,
         publishedAt: input.publish ? new Date() : null,
       },
     });
@@ -149,6 +172,7 @@ const publicItemSelect = {
   bulkDiscountPercent: true,
   suggestedAvgPriceYen: true,
   publishedAt: true,
+  serialExpiresAt: true,
   seller: {
     select: {
       id: true,
@@ -160,6 +184,30 @@ const publicItemSelect = {
     },
   },
 } as const;
+
+/** 期限切れを売り切れに更新 */
+export async function markExpiredListingsSoldOut(now = new Date()) {
+  await prisma.item.updateMany({
+    where: {
+      status: "ACTIVE",
+      serialExpiresAt: { lte: now },
+    },
+    data: {
+      status: "SOLD_OUT",
+      soldOutAt: now,
+    },
+  });
+}
+
+/** 検索・一覧に出す条件（応募期限の30分前まで） */
+function stillPurchasableExpiryFilter(
+  now = new Date(),
+): Prisma.ItemWhereInput {
+  const cutoff = new Date(now.getTime() + SERIAL_EXPIRY_BUFFER_MS);
+  return {
+    OR: [{ serialExpiresAt: null }, { serialExpiresAt: { gt: cutoff } }],
+  };
+}
 
 function mapPublicItems(
   rows: Awaited<
@@ -184,6 +232,7 @@ function mapPublicItems(
     bulkDiscountPercent: item.bulkDiscountPercent,
     suggestedAvgPriceYen: item.suggestedAvgPriceYen,
     publishedAt: item.publishedAt,
+    serialExpiresAt: item.serialExpiresAt,
     seller: {
       id: item.seller.id,
       publicId: item.seller.publicId,
@@ -196,8 +245,10 @@ function mapPublicItems(
 }
 
 export async function listPublicItems(params?: { take?: number; q?: string }) {
+  await markExpiredListingsSoldOut();
   const take = Math.min(params?.take ?? 50, 100);
   const q = params?.q?.trim();
+  const expiryOk = stillPurchasableExpiryFilter();
 
   // 検索時はお試し（0円）を除外
   if (q) {
@@ -206,13 +257,20 @@ export async function listPublicItems(params?: { take?: number; q?: string }) {
         status: "ACTIVE",
         stockAvailable: { gt: 0 },
         unitPriceYen: { gt: 0 },
-        OR: [
-          { title: { contains: q, mode: "insensitive" } },
-          { artistName: { contains: q, mode: "insensitive" } },
-          { eventName: { contains: q, mode: "insensitive" } },
-          { category: { contains: q, mode: "insensitive" } },
-          { description: { contains: q, mode: "insensitive" } },
-          { seller: { displayName: { contains: q, mode: "insensitive" } } },
+        AND: [
+          expiryOk,
+          {
+            OR: [
+              { title: { contains: q, mode: "insensitive" } },
+              { artistName: { contains: q, mode: "insensitive" } },
+              { eventName: { contains: q, mode: "insensitive" } },
+              { category: { contains: q, mode: "insensitive" } },
+              { description: { contains: q, mode: "insensitive" } },
+              {
+                seller: { displayName: { contains: q, mode: "insensitive" } },
+              },
+            ],
+          },
         ],
       },
       orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
@@ -229,6 +287,7 @@ export async function listPublicItems(params?: { take?: number; q?: string }) {
         status: "ACTIVE",
         stockAvailable: { gt: 0 },
         unitPriceYen: 0,
+        ...expiryOk,
       },
       orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
       take: 5,
@@ -239,6 +298,7 @@ export async function listPublicItems(params?: { take?: number; q?: string }) {
         status: "ACTIVE",
         stockAvailable: { gt: 0 },
         unitPriceYen: { gt: 0 },
+        ...expiryOk,
       },
       orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
       take,
@@ -249,7 +309,32 @@ export async function listPublicItems(params?: { take?: number; q?: string }) {
   return [...mapPublicItems(trialRows), ...mapPublicItems(rows)];
 }
 
+/** 出品者の公開中出品（ショップページ用） */
+export async function listPublicItemsBySellerId(
+  sellerId: string,
+  take = 40,
+) {
+  await markExpiredListingsSoldOut();
+  const expiryOk = stillPurchasableExpiryFilter();
+  const rows = await prisma.item.findMany({
+    where: {
+      sellerId,
+      status: "ACTIVE",
+      stockAvailable: { gt: 0 },
+      AND: [expiryOk],
+    },
+    orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
+    take: Math.min(take, 80),
+    select: publicItemSelect,
+  });
+  return mapPublicItems(rows);
+}
+
 export async function getPublicItem(id: string) {
+  await markExpiredListingsSoldOut();
+  // 決済途中離脱の在庫を戻してから表示（売り切れ誤表示を防ぐ）
+  const { releaseExpiredPendingCheckouts } = await import("@/services/checkout");
+  await releaseExpiredPendingCheckouts();
   return prisma.item.findFirst({
     where: { id, status: { in: ["ACTIVE", "SOLD_OUT"] } },
     select: {
@@ -270,6 +355,7 @@ export async function getPublicItem(id: string) {
       bulkDiscountPercent: true,
       suggestedAvgPriceYen: true,
       confirmationWindowMinutes: true,
+      serialExpiresAt: true,
       status: true,
       publishedAt: true,
       seller: {
@@ -281,6 +367,8 @@ export async function getPublicItem(id: string) {
           ratingScore: true,
           ratingCount: true,
           completedSales: true,
+          disputeCountAsSeller: true,
+          disputeCountAsBuyer: true,
         },
       },
     },
@@ -315,6 +403,7 @@ export async function listSellerListings(sellerId: string) {
       status: true,
       publishedAt: true,
       updatedAt: true,
+      serialExpiresAt: true,
       bulkDiscountEnabled: true,
       bulkDiscountMinQty: true,
       bulkDiscountPercent: true,
@@ -325,6 +414,7 @@ export async function listSellerListings(sellerId: string) {
     ...item,
     updatedAt: item.updatedAt.toISOString(),
     publishedAt: item.publishedAt?.toISOString() ?? null,
+    serialExpiresAt: item.serialExpiresAt?.toISOString() ?? null,
   }));
 }
 
@@ -356,6 +446,7 @@ export async function getSellerListingForEdit(sellerId: string, itemId: string) 
     bulkDiscountEnabled: item.bulkDiscountEnabled,
     bulkDiscountMinQty: item.bulkDiscountMinQty,
     bulkDiscountPercent: item.bulkDiscountPercent,
+    serialExpiresAt: item.serialExpiresAt?.toISOString() ?? null,
     isTrial: isTrialListing(item),
   };
 }
@@ -371,6 +462,7 @@ const updateListingSchema = z
     bulkDiscountEnabled: z.boolean().optional().default(false),
     bulkDiscountMinQty: z.number().int().min(2).optional().nullable(),
     bulkDiscountPercent: z.number().int().min(1).max(50).optional().nullable(),
+    serialExpiresAt: z.string().datetime(),
     /** 在庫型のみ。既存コードは見せず、追加分だけ受け付ける */
     addSerialCodes: z.array(z.string().min(1).max(500)).max(500).optional(),
     publish: z.boolean().optional(),
@@ -439,6 +531,9 @@ export async function updateListing(
     }
   }
 
+  const serialExpiresAt = new Date(input.serialExpiresAt);
+  assertSerialExpiryForPublish(serialExpiresAt);
+
   const availableAfter = item.stockAvailable + addCodes.length;
   let nextStatus = item.status;
   if (input.publish === false) {
@@ -475,6 +570,7 @@ export async function updateListing(
         eventName: input.eventName || null,
         category: input.category || null,
         unitPriceYen: input.unitPriceYen,
+        serialExpiresAt,
         bulkDiscountEnabled: input.bulkDiscountEnabled,
         bulkDiscountMinQty: input.bulkDiscountEnabled
           ? input.bulkDiscountMinQty

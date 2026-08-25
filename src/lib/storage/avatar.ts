@@ -1,5 +1,9 @@
 import { randomUUID } from "crypto";
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import { ApiError } from "@/lib/api";
 
 export const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
@@ -32,6 +36,14 @@ function getS3Client() {
       secretAccessKey: process.env.S3_SECRET_ACCESS_KEY!,
     },
   });
+}
+
+function appBaseUrl() {
+  return (
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_URL ||
+    "http://127.0.0.1:3000"
+  ).replace(/\/$/, "");
 }
 
 function extForMime(mime: string) {
@@ -69,6 +81,13 @@ export function assertAvatarMeta(opts: { contentType: string; size: number }) {
   }
 }
 
+function publicAvatarUrl(objectKey: string) {
+  const base = process.env.S3_PUBLIC_BASE_URL?.replace(/\/$/, "");
+  if (base) return `${base}/avatars/${objectKey}`;
+  // R2 非公開でもアプリ経由で表示できるようにする（s3:// はブラウザで真っ黒/壊れる）
+  return `${appBaseUrl()}/api/media/avatars/${objectKey}`;
+}
+
 export async function uploadAvatar(opts: {
   userId: string;
   buffer: Buffer;
@@ -90,19 +109,24 @@ export async function uploadAvatar(opts: {
   if (s3Configured()) {
     const bucket = process.env.S3_BUCKET!;
     const client = getS3Client();
-    await client.send(
-      new PutObjectCommand({
-        Bucket: bucket,
-        Key: `avatars/${objectKey}`,
-        Body: opts.buffer,
-        ContentType: mime,
-      }),
-    );
-    const base = process.env.S3_PUBLIC_BASE_URL?.replace(/\/$/, "");
-    const url = base
-      ? `${base}/avatars/${objectKey}`
-      : `s3://${bucket}/avatars/${objectKey}`;
-    return { key: `avatars/${objectKey}`, url };
+    try {
+      await client.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: `avatars/${objectKey}`,
+          Body: opts.buffer,
+          ContentType: mime,
+        }),
+      );
+    } catch (e) {
+      console.error("avatar upload failed", e);
+      throw new ApiError(
+        500,
+        "画像の保存に失敗しました。時間をおいてもう一度お試しください",
+        "UPLOAD_FAILED",
+      );
+    }
+    return { key: `avatars/${objectKey}`, url: publicAvatarUrl(objectKey) };
   }
 
   // Vercel など永続FSがない環境向け: 圧縮済み画像を data URL で保持
@@ -116,4 +140,45 @@ export async function uploadAvatar(opts: {
 
   const url = `data:${mime};base64,${opts.buffer.toString("base64")}`;
   return { key: `data:${opts.userId}/${objectKey}`, url };
+}
+
+export async function readAvatarObject(userId: string, filename: string) {
+  if (
+    userId.includes("..") ||
+    filename.includes("..") ||
+    filename.includes("/")
+  ) {
+    throw new ApiError(400, "不正なパスです", "BAD_PATH");
+  }
+  if (!s3Configured()) {
+    throw new ApiError(404, "画像が見つかりません", "NOT_FOUND");
+  }
+
+  const client = getS3Client();
+  try {
+    const got = await client.send(
+      new GetObjectCommand({
+        Bucket: process.env.S3_BUCKET!,
+        Key: `avatars/${userId}/${filename}`,
+      }),
+    );
+    const bytes = await got.Body?.transformToByteArray();
+    if (!bytes) throw new ApiError(404, "画像が見つかりません", "NOT_FOUND");
+    return {
+      buffer: Buffer.from(bytes),
+      contentType: got.ContentType || mimeFromName(filename),
+    };
+  } catch (e) {
+    if (e instanceof ApiError) throw e;
+    console.error("avatar read failed", e);
+    throw new ApiError(404, "画像が見つかりません", "NOT_FOUND");
+  }
+}
+
+function mimeFromName(name: string) {
+  const lower = name.toLowerCase();
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".webp")) return "image/webp";
+  if (lower.endsWith(".gif")) return "image/gif";
+  return "image/jpeg";
 }

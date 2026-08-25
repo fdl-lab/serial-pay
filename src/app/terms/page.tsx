@@ -34,7 +34,7 @@ export default function TermsPage() {
       <section className="card-surface space-y-3 text-sm leading-relaxed text-ink-soft">
         <h2 className="text-lg font-extrabold text-ink">第2条（サービスの内容）</h2>
         <p>
-          本サービスは、ユーザー間でシリアルコード等のデジタルコンテンツを売買するためのプラットフォーム（場）を提供します。当社は原則として売買の当事者ではなく、決済の預託（エスクロー）、本人確認、異議受付等の仕組みを通じて取引を支援します。
+          本サービスは、ユーザー間でシリアルコード等のデジタルコンテンツを売買するためのプラットフォーム（場）を提供します。当社は原則として売買の当事者ではなく、代金の一時お預かり、本人確認、異議受付等の仕組みを通じて取引を支援します。
         </p>
       </section>
 
@@ -43,7 +43,7 @@ export default function TermsPage() {
           第3条（アカウント・利用条件）
         </h2>
         <ul className="list-disc space-y-1 pl-5">
-          <li>本サービスの利用には、LINEログインおよび当社所定の本人確認（eKYC）の完了が必要です。</li>
+          <li>本サービスの利用には、LINEログインおよび当社所定の本人確認の完了が必要です。</li>
           <li>ユーザーは正確な情報を登録し、自己の責任でアカウントを管理するものとします。</li>
           <li>出金（振込）を行う場合は、当社が指定する決済・送金サービス（Stripe Connect等）への登録が必要です。</li>
           <li>当社が不適切と判断した場合、登録を拒否し、または利用を制限することがあります。</li>
@@ -66,7 +66,7 @@ export default function TermsPage() {
 
       <section className="card-surface space-y-3 text-sm leading-relaxed text-ink-soft">
         <h2 className="text-lg font-extrabold text-ink">
-          第5条（売買・エスクロー・手数料）
+          第5条（売買・代金のお預かり・手数料）
         </h2>
         <ul className="list-disc space-y-1 pl-5">
           <li>
@@ -95,6 +95,7 @@ export default function TermsPage() {
         <h2 className="text-lg font-extrabold text-ink">第6条（トラブル・異議）</h2>
         <p>
           開示したコードが無効・使用済み等である場合、ユーザーは取引完了前に所定の方法で異議申し立てを行うことができます。当社は提出資料等を確認のうえ、返金許可または却下等を判断します。取引完了後の返金には原則として応じられません。
+          異議申し立てに際して提出された画面録画等の資料は、審査結果の確定後90日間保管し、その後削除します。
         </p>
       </section>
 
@@ -143,10 +144,10 @@ export default function TermsPage() {
           <br />
           メール：
           <a
-            href="mailto:info@f-d-l.jp"
+            href="mailto:info@serial-pay.com"
             className="font-semibold text-mint-deep underline"
           >
-            info@f-d-l.jp
+            info@serial-pay.com
           </a>
         </p>
       </section>

@@ -246,12 +246,19 @@ export async function getPublicSellerProfile(publicId: string) {
       ratingScore: true,
       ratingCount: true,
       completedSales: true,
+      disputeCountAsSeller: true,
+      disputeCountAsBuyer: true,
       createdAt: true,
     },
   });
   if (!user) return null;
 
-  const ratings = await listSellerRatings(user.id, 30);
+  const { listPublicItemsBySellerId } = await import("@/services/listing");
+  const [ratings, listings] = await Promise.all([
+    listSellerRatings(user.id, 30),
+    listPublicItemsBySellerId(user.id, 40),
+  ]);
+
   return {
     publicId: user.publicId,
     displayName: user.displayName,
@@ -259,7 +266,10 @@ export async function getPublicSellerProfile(publicId: string) {
     ratingScore: Number(user.ratingScore),
     ratingCount: user.ratingCount,
     completedSales: user.completedSales,
+    disputeCountAsSeller: user.disputeCountAsSeller,
+    disputeCountAsBuyer: user.disputeCountAsBuyer,
     memberSince: user.createdAt,
     ratings,
+    listings,
   };
 }

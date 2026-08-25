@@ -2,7 +2,7 @@
   "name": "serial-pay",
   "version": "0.1.0",
   "private": true,
-  "description": "推し活特化型 シリアルコード即時売買プラットフォーム",
+  "description": "推し活特化型 応募用シリアルコード譲渡プラットフォーム",
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
@@ -17,11 +17,13 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1109.0",
+    "@aws-sdk/s3-request-presigner": "^3.1116.0",
     "@prisma/client": "^6.5.0",
     "@stripe/react-stripe-js": "^3.5.0",
     "@stripe/stripe-js": "^5.7.0",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.3",
+    "@vercel/analytics": "^2.0.1",
     "next": "^15.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

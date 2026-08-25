@@ -1,5 +1,5 @@
 /* Serial Pay — network-first; avoid sticking to stale HTML */
-const CACHE = "serial-pay-v2";
+const CACHE = "serial-pay-v4";
 const PRECACHE = ["/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {

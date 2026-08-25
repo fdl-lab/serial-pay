@@ -6,7 +6,7 @@ type Props = {
 
 export default async function TransactionRevealPage({ params }: Props) {
   const { id } = await params;
-  const windowMinutes = Number(process.env.CONFIRMATION_WINDOW_MINUTES ?? 30);
+  const windowMinutes = Number(process.env.CONFIRMATION_WINDOW_MINUTES ?? 60);
 
   return (
     <main>

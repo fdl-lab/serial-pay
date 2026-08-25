@@ -27,6 +27,9 @@ export async function compressAvatarFile(
     canvas.height = h;
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("画像の変換に失敗しました");
+    // JPEG は透明を黒にするので、先に白で塗る（PNG/WebP 透過対策）
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, w, h);
     ctx.drawImage(bitmap, 0, 0, w, h);
 
     const blob = await new Promise<Blob>((resolve, reject) => {
