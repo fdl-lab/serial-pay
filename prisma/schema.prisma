@@ -299,7 +299,9 @@ model Item {
 
   title       String
   description String? @db.Text
-  artistName  String? // アーティスト / グループ名
+  /// アーティスト名（AES暗号化して保管。平文でのイベント別集計不可）
+  artistName  String?
+  /// イベント名（AES暗号化して保管。平文でのイベント別集計不可）
   eventName   String?
   eventDate   DateTime?
   category    String?
@@ -333,8 +335,7 @@ model Item {
   @@index([sellerId])
   @@index([status, listingType])
   @@index([status, serialExpiresAt])
-  @@index([artistName])
-  @@index([eventName])
+  // artistName / eventName は暗号化保管のため索引なし（イベント別集計を助長しない）
   @@map("items")
 }
 
@@ -489,6 +490,7 @@ model Rating {
   @@map("ratings")
 }
 
+/// 旧・イベント別相場テーブル。新規集計は行わず参照もしない（プライバシー方針）。
 model MarketStat {
   id        String   @id @default(cuid())
   updatedAt DateTime @updatedAt

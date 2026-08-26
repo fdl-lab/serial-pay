@@ -1,9 +1,6 @@
-import { NextResponse } from "next/server";
-import { getMarketHint } from "@/services/listing";
+import { jsonOk } from "@/lib/api";
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const eventName = searchParams.get("eventName") ?? undefined;
-  const hint = await getMarketHint(eventName);
-  return NextResponse.json({ market: hint });
+/** イベント別相場・出品数の集計は提供しない（暗号化保管・非集計方針） */
+export async function GET() {
+  return jsonOk({ market: null });
 }

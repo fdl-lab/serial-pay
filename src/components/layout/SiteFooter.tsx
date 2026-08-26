@@ -32,7 +32,16 @@ export function SiteFooter() {
           ))}
         </ul>
       </nav>
-      <p className="mt-3 text-[10px] text-ink-soft/80">© シリアルPay</p>
+      <p className="mt-3 text-[10px] leading-relaxed text-ink-soft/80">
+        イベント情報は暗号化保管・出品数の非集計。詳しくは
+        <Link
+          href="/guide#event-privacy"
+          className="underline-offset-2 hover:text-mint-deep hover:underline"
+        >
+          ご利用ガイド
+        </Link>
+      </p>
+      <p className="mt-1.5 text-[10px] text-ink-soft/80">© シリアルPay</p>
     </footer>
   );
 }

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/lib/api";
+import { revealEventMeta } from "@/lib/crypto/event-meta";
 import { creditSaleToWallet } from "@/services/wallet";
 
 const ratingSchema = z.object({
@@ -199,7 +200,7 @@ export async function listPendingBuyerRatings(buyerId: string) {
   return rows.map((tx) => ({
     transactionId: tx.id,
     itemTitle: tx.item.title,
-    artistName: tx.item.artistName,
+    artistName: revealEventMeta(tx.item.artistName),
     seller: {
       id: tx.seller.id,
       publicId: tx.seller.publicId,

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/lib/api";
+import { openArtistAndEvent } from "@/lib/crypto/event-meta";
 import type { TransactionStatus } from "@prisma/client";
 
 const OPEN_STATUSES = ["SUBMITTED", "UNDER_REVIEW"] as const;
@@ -170,7 +171,7 @@ export async function listOpenDisputes() {
       walletPaidYen: d.transaction.walletPaidYen,
       quantity: d.transaction.quantity,
       status: d.transaction.status,
-      item: d.transaction.item,
+      item: openArtistAndEvent(d.transaction.item),
     },
   }));
 }

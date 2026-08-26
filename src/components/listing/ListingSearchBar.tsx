@@ -36,7 +36,7 @@ export function ListingSearchBar() {
           type="search"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="アーティスト名・タイトル・イベントで検索"
+          placeholder="アーティスト・イベント・タイトルなどで検索"
           enterKeyHint="search"
           autoComplete="off"
           className="min-h-10 w-full rounded-xl border border-ink/15 bg-white px-3 py-2.5 text-sm outline-none ring-mint/40 placeholder:text-ink-soft/70 focus:ring-2"

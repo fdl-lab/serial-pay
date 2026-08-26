@@ -191,11 +191,6 @@ export default async function ItemDetailPage({ params }: Props) {
             <p className="font-mono text-2xl font-semibold sm:text-3xl">
               {trial ? "¥0" : formatYen(item.unitPriceYen)}
             </p>
-            {!trial && item.suggestedAvgPriceYen != null && (
-              <p className="me-item-meta mt-1">
-                相場めやす {formatYen(item.suggestedAvgPriceYen)}
-              </p>
-            )}
           </div>
         </div>
 

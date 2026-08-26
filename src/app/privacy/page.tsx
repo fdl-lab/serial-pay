@@ -21,7 +21,7 @@ export default function PrivacyPage() {
         <p className="text-sm text-ink-soft">
           FDL合同会社（以下「当社」）は、本サービス「シリアルPay」における個人情報の取扱いについて、以下のとおり定めます。
         </p>
-        <p className="text-xs text-ink-soft">最終更新日：2026年8月18日</p>
+        <p className="text-xs text-ink-soft">最終更新日：2026年8月26日</p>
       </header>
 
       <section className="card-surface space-y-3 text-sm leading-relaxed text-ink-soft">
@@ -32,6 +32,9 @@ export default function PrivacyPage() {
           <li>連絡先情報（メールアドレス、電話番号等。取得する場合）</li>
           <li>本人確認に関する情報およびその処理結果（決済事業者が提供する本人確認サービス等を利用）</li>
           <li>取引情報（出品・購入履歴、決済金額、代金のお預かり状態、評価、異議内容、添付画録等）</li>
+          <li>
+            出品メタ情報（タイトル、アーティスト名・イベント名等。アーティスト名・イベント名は暗号化して保管し、イベント単位の出品数集計には用いません）
+          </li>
           <li>出金・振込に関する情報（Connect連携により決済事業者が取得・管理する口座情報を含む）</li>
           <li>端末・ログ情報（IPアドレス、ブラウザ情報、アクセス日時、Cookie等）</li>
         </ul>
@@ -80,7 +83,7 @@ export default function PrivacyPage() {
       <section className="card-surface space-y-3 text-sm leading-relaxed text-ink-soft">
         <h2 className="text-lg font-extrabold text-ink">5. 安全管理</h2>
         <p>
-          当社は、個人情報の漏えい、滅失、毀損等を防止するため、アクセス制御、通信の暗号化、権限管理など、合理的な安全管理措置を講じます。シリアルコード等は適切に保護したうえで取り扱います。
+          当社は、個人情報の漏えい、滅失、毀損等を防止するため、アクセス制御、通信の暗号化、権限管理など、合理的な安全管理措置を講じます。シリアルコードおよびアーティスト名・イベント名等は暗号化して保管し、イベントごとの出品数を集計する仕組みは設けていません。
         </p>
       </section>
 

@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { createCipheriv, createHmac, randomBytes } from "crypto";
+import { sealArtistAndEvent } from "../src/lib/crypto/event-meta";
 
 const prisma = new PrismaClient();
 
@@ -73,43 +74,26 @@ async function main() {
     create: { userId: seller.id, balanceYen: 0, pendingYen: 0 },
   });
 
-  await prisma.marketStat.upsert({
-    where: {
-      eventName_category_windowDays: {
-        eventName: "○○ Live 2026",
-        category: "",
-        windowDays: 14,
-      },
-    },
-    update: { avgPriceYen: 1250, sampleCount: 40, medianPriceYen: 1200 },
-    create: {
-      eventName: "○○ Live 2026",
-      category: "",
-      windowDays: 14,
-      avgPriceYen: 1250,
-      medianPriceYen: 1200,
-      minPriceYen: 900,
-      maxPriceYen: 1800,
-      sampleCount: 40,
-    },
-  });
+  // market_stats へのシードは行わない（イベント別集計なし）
 
   const existingDemo = await prisma.item.count({
     where: { sellerId: seller.id, title: { startsWith: "[デモ]" } },
   });
 
   if (existingDemo > 0) {
+    const sealedSample = sealArtistAndEvent({ artistName: "Sample Artists" });
+    const sealedDelta = sealArtistAndEvent({ artistName: "△△" });
     await prisma.item.updateMany({
       where: { sellerId: seller.id, title: { startsWith: "[デモ] ○○" } },
-      data: { artistName: "Sample Artists" },
+      data: { artistName: sealedSample.artistName },
     });
     await prisma.item.updateMany({
       where: { sellerId: seller.id, title: { startsWith: "[デモ] ファンクラブ" } },
-      data: { artistName: "Sample Artists" },
+      data: { artistName: sealedSample.artistName },
     });
     await prisma.item.updateMany({
       where: { sellerId: seller.id, title: { startsWith: "[デモ] グッズ" } },
-      data: { artistName: "△△" },
+      data: { artistName: sealedDelta.artistName },
     });
     console.log("既存デモ出品にアーティスト名を補完したよ");
   }
@@ -162,12 +146,16 @@ async function main() {
 
     for (const d of demos) {
       const stock = d.codes.length;
+      const sealed = sealArtistAndEvent({
+        artistName: d.artistName,
+        eventName: d.eventName,
+      });
       const item = await prisma.item.create({
         data: {
           sellerId: seller.id,
           title: d.title,
-          artistName: d.artistName,
-          eventName: d.eventName,
+          artistName: sealed.artistName,
+          eventName: sealed.eventName,
           listingType: d.listingType,
           status: "ACTIVE",
           unitPriceYen: d.unitPriceYen,
@@ -177,7 +165,7 @@ async function main() {
           bulkDiscountEnabled: d.bulk,
           bulkDiscountMinQty: d.bulk ? 3 : null,
           bulkDiscountPercent: d.bulk ? 10 : null,
-          suggestedAvgPriceYen: 1250,
+          suggestedAvgPriceYen: null,
           publishedAt: new Date(),
         },
       });
@@ -204,12 +192,16 @@ async function main() {
   });
 
   if (!trialItem) {
+    const trialSealed = sealArtistAndEvent({
+      artistName: "シリアルPay",
+      eventName: "はじめての購入体験",
+    });
     trialItem = await prisma.item.create({
       data: {
         sellerId: seller.id,
         title: TRIAL_TITLE,
-        artistName: "シリアルPay",
-        eventName: "はじめての購入体験",
+        artistName: trialSealed.artistName,
+        eventName: trialSealed.eventName,
         category: "お試し",
         description:
           "カード不要・0円で、お支払いからシリアル開示までの流れを体験できます。",

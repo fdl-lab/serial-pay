@@ -7,6 +7,7 @@ import {
 import { calcPriceBreakdown } from "@/lib/money";
 import { ApiError, assertBuyerEligible, assertPhoneVerified } from "@/lib/api";
 import { decryptSerial, encryptSerial, hashSerial } from "@/lib/crypto/serial";
+import { revealEventMeta } from "@/lib/crypto/event-meta";
 import {
   debitWalletForPurchase,
   creditWalletRefund,
@@ -668,7 +669,7 @@ export async function getRevealGateForBuyer(
   return {
     transactionId: tx.id,
     itemTitle: tx.item.title,
-    eventName: tx.item.eventName,
+    eventName: revealEventMeta(tx.item.eventName),
     status: tx.status,
     awaitingReveal,
     codeRevealedAt: tx.codeRevealedAt,
@@ -774,7 +775,7 @@ export async function revealCodesForBuyer(buyerId: string, transactionId: string
   return {
     transactionId: tx.id,
     itemTitle: tx.item.title,
-    eventName: tx.item.eventName,
+    eventName: revealEventMeta(tx.item.eventName),
     status,
     quantity: tx.quantity,
     codeRevealedAt,
@@ -868,8 +869,8 @@ export async function listBuyerPurchases(buyerId: string) {
       confirmationDeadlineAt,
       createdAt: tx.createdAt,
       itemTitle: tx.item.title,
-      artistName: tx.item.artistName,
-      eventName: tx.item.eventName,
+      artistName: revealEventMeta(tx.item.artistName),
+      eventName: revealEventMeta(tx.item.eventName),
     };
   });
 }
@@ -911,8 +912,8 @@ export async function listBuyerPurchaseHistory(buyerId: string, take = 40) {
     createdAt: tx.createdAt,
     completedAt: tx.payoutReleasedAt ?? tx.updatedAt,
     itemTitle: tx.item.title,
-    artistName: tx.item.artistName,
-    eventName: tx.item.eventName,
+    artistName: revealEventMeta(tx.item.artistName),
+    eventName: revealEventMeta(tx.item.eventName),
     seller: {
       publicId: tx.seller.publicId,
       displayName: tx.seller.displayName,
@@ -967,6 +968,6 @@ export async function getCheckoutSessionForBuyer(
     walletPaidYen: tx.walletPaidYen,
     stripePaidYen: tx.stripePaidYen,
     itemTitle: tx.item.title,
-    artistName: tx.item.artistName,
+    artistName: revealEventMeta(tx.item.artistName),
   };
 }

@@ -2,6 +2,10 @@ import { ListingType, Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { encryptSerial, hashSerial } from "@/lib/crypto/serial";
+import {
+  openArtistAndEvent,
+  sealArtistAndEvent,
+} from "@/lib/crypto/event-meta";
 import { ApiError, assertSellerEligible } from "@/lib/api";
 import { isTrialListing } from "@/lib/trial-listing";
 import {
@@ -85,11 +89,9 @@ export async function createListing(seller: User, raw: unknown) {
     throw new ApiError(400, "同一出品内で重複するシリアルがあります", "DUPLICATE_CODES");
   }
 
-  const avg = await prisma.marketStat.findFirst({
-    where: {
-      eventName: input.eventName ?? "",
-      windowDays: 14,
-    },
+  const sealed = sealArtistAndEvent({
+    artistName: input.artistName,
+    eventName: input.eventName,
   });
 
   const stockTotal = input.serialCodes.length;
@@ -102,8 +104,8 @@ export async function createListing(seller: User, raw: unknown) {
         sellerId: seller.id,
         title: input.title,
         description: input.description,
-        artistName: input.artistName,
-        eventName: input.eventName,
+        artistName: sealed.artistName,
+        eventName: sealed.eventName,
         eventDate: input.eventDate ? new Date(input.eventDate) : null,
         category: input.category,
         listingType: input.listingType as ListingType,
@@ -115,7 +117,8 @@ export async function createListing(seller: User, raw: unknown) {
         bulkDiscountEnabled: input.bulkDiscountEnabled,
         bulkDiscountMinQty: input.bulkDiscountMinQty,
         bulkDiscountPercent: input.bulkDiscountPercent,
-        suggestedAvgPriceYen: avg?.avgPriceYen ?? null,
+        // イベント別相場・出品数の集計は行わない（プライバシー方針）
+        suggestedAvgPriceYen: null,
         confirmationWindowMinutes: input.confirmationWindowMinutes ?? 60,
         serialExpiresAt,
         publishedAt: input.publish ? new Date() : null,
@@ -149,17 +152,15 @@ export async function createListing(seller: User, raw: unknown) {
   };
 }
 
-export async function getMarketHint(eventName?: string) {
-  if (!eventName) return null;
-  return prisma.marketStat.findFirst({
-    where: { eventName, windowDays: 14 },
-    orderBy: { updatedAt: "desc" },
-  });
+export async function getMarketHint(_eventName?: string) {
+  // イベント別の相場・出品数集計は提供しない（暗号化保管・非集計方針）
+  return null;
 }
 
 const publicItemSelect = {
   id: true,
   title: true,
+  description: true,
   artistName: true,
   eventName: true,
   category: true,
@@ -220,8 +221,11 @@ function mapPublicItems(
   return rows.map((item) => ({
     id: item.id,
     title: item.title,
-    artistName: item.artistName,
-    eventName: item.eventName,
+    description: item.description,
+    ...openArtistAndEvent({
+      artistName: item.artistName,
+      eventName: item.eventName,
+    }),
     category: item.category,
     listingType: item.listingType,
     unitPriceYen: item.unitPriceYen,
@@ -230,7 +234,7 @@ function mapPublicItems(
     bulkDiscountEnabled: item.bulkDiscountEnabled,
     bulkDiscountMinQty: item.bulkDiscountMinQty,
     bulkDiscountPercent: item.bulkDiscountPercent,
-    suggestedAvgPriceYen: item.suggestedAvgPriceYen,
+    suggestedAvgPriceYen: null,
     publishedAt: item.publishedAt,
     serialExpiresAt: item.serialExpiresAt,
     seller: {
@@ -250,34 +254,37 @@ export async function listPublicItems(params?: { take?: number; q?: string }) {
   const q = params?.q?.trim();
   const expiryOk = stillPurchasableExpiryFilter();
 
-  // 検索時はお試し（0円）を除外
+  // 検索時はお試し（0円）を除外。
+  // イベント名・アーティスト名は暗号化保管のため DB 部分一致は使わず、
+  // 復号後にアプリ側で絞り込む（照合用ハッシュは持たず、イベント別集計の導線を作らない）。
   if (q) {
+    const needle = q.toLocaleLowerCase("ja-JP");
     const rows = await prisma.item.findMany({
       where: {
         status: "ACTIVE",
         stockAvailable: { gt: 0 },
         unitPriceYen: { gt: 0 },
-        AND: [
-          expiryOk,
-          {
-            OR: [
-              { title: { contains: q, mode: "insensitive" } },
-              { artistName: { contains: q, mode: "insensitive" } },
-              { eventName: { contains: q, mode: "insensitive" } },
-              { category: { contains: q, mode: "insensitive" } },
-              { description: { contains: q, mode: "insensitive" } },
-              {
-                seller: { displayName: { contains: q, mode: "insensitive" } },
-              },
-            ],
-          },
-        ],
+        AND: [expiryOk],
       },
       orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
-      take,
+      take: 500,
       select: publicItemSelect,
     });
-    return mapPublicItems(rows);
+    return mapPublicItems(rows)
+      .filter((item) => {
+        const haystacks = [
+          item.title,
+          item.artistName,
+          item.eventName,
+          item.category,
+          item.description,
+          item.seller.displayName,
+        ];
+        return haystacks.some((h) =>
+          h ? h.toLocaleLowerCase("ja-JP").includes(needle) : false,
+        );
+      })
+      .slice(0, take);
   }
 
   // 通常一覧: お試しを先頭にピン留め（take 外に押し出されないよう別取得）
@@ -335,7 +342,7 @@ export async function getPublicItem(id: string) {
   // 決済途中離脱の在庫を戻してから表示（売り切れ誤表示を防ぐ）
   const { releaseExpiredPendingCheckouts } = await import("@/services/checkout");
   await releaseExpiredPendingCheckouts();
-  return prisma.item.findFirst({
+  const item = await prisma.item.findFirst({
     where: { id, status: { in: ["ACTIVE", "SOLD_OUT"] } },
     select: {
       id: true,
@@ -373,6 +380,9 @@ export async function getPublicItem(id: string) {
       },
     },
   });
+  if (!item) return null;
+  const opened = openArtistAndEvent(item);
+  return { ...opened, suggestedAvgPriceYen: null as number | null };
 }
 
 const OPEN_TX_STATUSES = [
@@ -410,12 +420,15 @@ export async function listSellerListings(sellerId: string) {
     },
   });
 
-  return rows.map((item) => ({
-    ...item,
-    updatedAt: item.updatedAt.toISOString(),
-    publishedAt: item.publishedAt?.toISOString() ?? null,
-    serialExpiresAt: item.serialExpiresAt?.toISOString() ?? null,
-  }));
+  return rows.map((item) => {
+    const opened = openArtistAndEvent(item);
+    return {
+      ...opened,
+      updatedAt: item.updatedAt.toISOString(),
+      publishedAt: item.publishedAt?.toISOString() ?? null,
+      serialExpiresAt: item.serialExpiresAt?.toISOString() ?? null,
+    };
+  });
 }
 
 export async function getSellerListingForEdit(sellerId: string, itemId: string) {
@@ -434,8 +447,10 @@ export async function getSellerListingForEdit(sellerId: string, itemId: string) 
     id: item.id,
     title: item.title,
     description: item.description,
-    artistName: item.artistName,
-    eventName: item.eventName,
+    ...openArtistAndEvent({
+      artistName: item.artistName,
+      eventName: item.eventName,
+    }),
     category: item.category,
     listingType: item.listingType,
     unitPriceYen: item.unitPriceYen,
@@ -534,6 +549,11 @@ export async function updateListing(
   const serialExpiresAt = new Date(input.serialExpiresAt);
   assertSerialExpiryForPublish(serialExpiresAt);
 
+  const sealed = sealArtistAndEvent({
+    artistName: input.artistName,
+    eventName: input.eventName,
+  });
+
   const availableAfter = item.stockAvailable + addCodes.length;
   let nextStatus = item.status;
   if (input.publish === false) {
@@ -566,10 +586,11 @@ export async function updateListing(
       data: {
         title: input.title,
         description: input.description ?? null,
-        artistName: input.artistName,
-        eventName: input.eventName || null,
+        artistName: sealed.artistName,
+        eventName: sealed.eventName,
         category: input.category || null,
         unitPriceYen: input.unitPriceYen,
+        suggestedAvgPriceYen: null,
         serialExpiresAt,
         bulkDiscountEnabled: input.bulkDiscountEnabled,
         bulkDiscountMinQty: input.bulkDiscountEnabled

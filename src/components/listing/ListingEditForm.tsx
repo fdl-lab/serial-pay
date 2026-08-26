@@ -55,7 +55,6 @@ export function ListingEditForm({ itemId }: Props) {
   const [bulkOn, setBulkOn] = useState(false);
   const [bulkMin, setBulkMin] = useState(10);
   const [bulkPct, setBulkPct] = useState(10);
-  const [marketAvg, setMarketAvg] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -121,21 +120,6 @@ export function ListingEditForm({ itemId }: Props) {
       cancelled = true;
     };
   }, [itemId]);
-
-  useEffect(() => {
-    if (!eventName.trim()) {
-      setMarketAvg(null);
-      return;
-    }
-    const t = window.setTimeout(async () => {
-      const res = await fetch(
-        `/api/market-stats?eventName=${encodeURIComponent(eventName.trim())}`,
-      );
-      const json = await res.json();
-      setMarketAvg(json.market?.avgPriceYen ?? null);
-    }, 400);
-    return () => window.clearTimeout(t);
-  }, [eventName]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -270,12 +254,6 @@ export function ListingEditForm({ itemId }: Props) {
           onChange={(e) => setEventName(e.target.value)}
         />
       </label>
-
-      {marketAvg != null && (
-        <p className="mb-4 rounded-xl border border-dashed border-mint-deep/40 bg-mint/10 px-3 py-2 text-sm">
-          直近の平均相場めやす: <strong>{formatYen(marketAvg)}</strong> / 枚
-        </p>
-      )}
 
       <label className="field">
         <span>1枚あたり単価（円）</span>

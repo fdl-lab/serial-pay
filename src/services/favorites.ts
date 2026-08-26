@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/lib/api";
+import { openArtistAndEvent } from "@/lib/crypto/event-meta";
 
 export async function listFavorites(userId: string) {
   const rows = await prisma.favorite.findMany({
@@ -29,7 +30,7 @@ export async function listFavorites(userId: string) {
   return rows.map((r) => ({
     itemId: r.itemId,
     createdAt: r.createdAt,
-    item: r.item,
+    item: openArtistAndEvent(r.item),
   }));
 }
 

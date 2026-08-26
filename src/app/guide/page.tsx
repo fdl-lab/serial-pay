@@ -100,6 +100,26 @@ export default function GuidePage() {
         </ul>
       </section>
 
+      <section id="event-privacy" className="card-surface space-y-4">
+        <h2 className="text-xl font-extrabold tracking-tight">
+          イベント情報の取り扱い（出品数の非集計）
+        </h2>
+        <p className="text-sm leading-relaxed text-ink-soft">
+          「とは言っても、裏で出品数を集計されたりしない？」という不安をゼロにするため、シリアルPayではデータベース上のイベント情報を暗号化して管理しています。全体やイベントごとの出品数をカウントするシステム自体が存在しないため、運営であっても「いまこのイベントで何枚出品されているか」を集計できない構造にしています。
+        </p>
+        <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-ink-soft">
+          <li>
+            アーティスト名・イベント名は、シリアルコードと同様に暗号化して保管します（同じ文言でも保管値は毎回異なります）。
+          </li>
+          <li>
+            イベント別の相場表示・出品数ランキングなど、集計を前提とした機能はありません。
+          </li>
+          <li>
+            検索では画面表示用に復号したうえでイベント名・アーティスト名でもヒットしますが、イベント別の出品数を集計する仕組みはありません。
+          </li>
+        </ul>
+      </section>
+
       <section className="card-surface space-y-4">
         <h2 className="text-xl font-extrabold tracking-tight">よくある質問（FAQ）</h2>
 
@@ -124,6 +144,20 @@ export default function GuidePage() {
             <p className="mt-2 text-sm leading-relaxed text-ink-soft">
               できません。お支払い完了後の購入者都合キャンセルは受け付けていません。
               コード不備がある場合のみ、異議申し立ての手続きをご利用ください。
+            </p>
+          </details>
+
+          <details className="rounded-2xl border border-ink/10 bg-white/70 px-4 py-3">
+            <summary className="cursor-pointer font-bold">
+              イベントごとの出品数を運営に見られませんか？
+            </summary>
+            <p className="mt-2 text-sm leading-relaxed text-ink-soft">
+              いいえ。データベース上のイベント情報は暗号化して管理しており、全体やイベントごとの出品数をカウントするシステム自体がありません。
+              運営であっても「いまこのイベントで何枚出品されているか」を集計できない構造です。詳しくは
+              <a href="#event-privacy" className="font-semibold text-mint-deep underline-offset-2 hover:underline">
+                イベント情報の取り扱い
+              </a>
+              をご覧ください。
             </p>
           </details>
 
